@@ -54,6 +54,12 @@ pub fn main() !void {
     const screen_region = screen.asRegion();
     try stdout.print("  Screen: {}x{}\n", .{ screen_region.width(), screen_region.height() });
 
+    // Move mouse to corner BEFORE capturing, so cursor doesn't affect pattern area
+    // This ensures the center area (where we extract the pattern) is clean
+    const Mouse = zikuli.Mouse;
+    try Mouse.moveTo(10, 10);
+    std.Thread.sleep(100 * std.time.ns_per_ms); // Brief pause for screen to update
+
     // Capture screen and create a pattern from center
     var capture = try screen.capture();
     defer capture.deinit();
@@ -61,7 +67,7 @@ pub fn main() !void {
     var full_image = try Image.fromCapture(allocator, capture);
     defer full_image.deinit();
 
-    // Extract 50x50 pattern from center
+    // Extract 50x50 pattern from center (cursor is in corner, won't affect this)
     const center_x: u32 = capture.width / 2;
     const center_y: u32 = capture.height / 2;
     const pattern_rect = Rectangle.init(
@@ -170,6 +176,9 @@ pub fn main() !void {
             match_result.center().y,
         });
         tests_passed += 1;
+        // Move mouse back to corner so cursor doesn't affect pattern area
+        try Mouse.moveTo(10, 10);
+        std.Thread.sleep(100 * std.time.ns_per_ms);
     }
 
     // ========================================================================
@@ -184,6 +193,9 @@ pub fn main() !void {
         };
         try stdout.print("  PASS: Double-clicked on pattern\n\n", .{});
         tests_passed += 1;
+        // Move mouse back to corner so cursor doesn't affect pattern area
+        try Mouse.moveTo(10, 10);
+        std.Thread.sleep(100 * std.time.ns_per_ms);
     }
 
     // ========================================================================
@@ -198,6 +210,9 @@ pub fn main() !void {
         };
         try stdout.print("  PASS: Right-clicked on pattern\n\n", .{});
         tests_passed += 1;
+        // Move mouse back to corner so cursor doesn't affect pattern area
+        try Mouse.moveTo(10, 10);
+        std.Thread.sleep(100 * std.time.ns_per_ms);
     }
 
     // ========================================================================
@@ -215,6 +230,9 @@ pub fn main() !void {
             match_result.center().y,
         });
         tests_passed += 1;
+        // Move mouse back to corner for subsequent tests
+        try Mouse.moveTo(10, 10);
+        std.Thread.sleep(100 * std.time.ns_per_ms);
     }
 
     // ========================================================================
