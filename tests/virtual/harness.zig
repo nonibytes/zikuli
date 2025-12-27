@@ -29,6 +29,19 @@ pub const ContentServer = content_server.ContentServer;
 pub const Window = content_server.Window;
 pub const Verifier = verification.Verifier;
 
+/// RGB color type
+pub const RGB = struct {
+    r: u8,
+    g: u8,
+    b: u8,
+};
+
+/// Screen size type
+pub const ScreenSize = struct {
+    width: u16,
+    height: u16,
+};
+
 /// Test harness for virtual display testing
 pub const TestHarness = struct {
     allocator: std.mem.Allocator,
@@ -41,21 +54,21 @@ pub const TestHarness = struct {
         description: []const u8,
         expected_x: i16,
         expected_y: i16,
-        expected_color: ?struct { r: u8, g: u8, b: u8 },
+        expected_color: ?RGB,
     };
 
     pub fn init(allocator: std.mem.Allocator) !TestHarness {
-        const content = try ContentServer.init(allocator);
+        var content = try ContentServer.init(allocator);
         errdefer content.deinit();
 
-        const verifier = try Verifier.init(allocator);
+        var verifier = try Verifier.init(allocator);
         errdefer verifier.deinit();
 
         return TestHarness{
             .allocator = allocator,
             .content = content,
             .verifier = verifier,
-            .placed_windows = std.ArrayList(PlacedWindow).init(allocator),
+            .placed_windows = .empty,
         };
     }
 
@@ -64,7 +77,7 @@ pub const TestHarness = struct {
         for (self.placed_windows.items) |pw| {
             self.allocator.free(pw.description);
         }
-        self.placed_windows.deinit();
+        self.placed_windows.deinit(self.allocator);
 
         self.content.deinit();
         self.verifier.deinit();
@@ -76,7 +89,7 @@ pub const TestHarness = struct {
         x: i16,
         y: i16,
         size: u16,
-        color: struct { r: u8, g: u8, b: u8 },
+        color: RGB,
     ) !*Window {
         var win = try self.content.createWindow(x, y, size, size);
         win.fillColor(color.r, color.g, color.b);
@@ -89,7 +102,7 @@ pub const TestHarness = struct {
             .{ color.r, color.g, color.b, x, y },
         );
 
-        try self.placed_windows.append(.{
+        try self.placed_windows.append(self.allocator, .{
             .window = win,
             .description = desc,
             .expected_x = x,
@@ -123,7 +136,7 @@ pub const TestHarness = struct {
         self.content.sync();
 
         // Small delay to ensure rendering is complete
-        std.time.sleep(50 * std.time.ns_per_ms);
+        std.Thread.sleep(50 * std.time.ns_per_ms);
     }
 
     /// Verify that a window is visible at its expected location
@@ -145,8 +158,9 @@ pub const TestHarness = struct {
     }
 
     /// Get screen dimensions
-    pub fn getScreenSize(self: *TestHarness) struct { width: u16, height: u16 } {
-        return self.content.getScreenSize();
+    pub fn getScreenSize(self: *TestHarness) ScreenSize {
+        const size = self.content.getScreenSize();
+        return ScreenSize{ .width = size.width, .height = size.height };
     }
 
     /// Find a placed window by its approximate location
@@ -220,7 +234,7 @@ test "TestHarness: place and verify color square" {
             _ = try harness.placeColorSquare(100, 100, 50, .{ .r = 255, .g = 0, .b = 0 });
 
             // Wait for rendering
-            std.time.sleep(100 * std.time.ns_per_ms);
+            std.Thread.sleep(100 * std.time.ns_per_ms);
 
             // Verify it's visible
             try harness.verifyAllVisible();

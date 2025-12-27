@@ -14,9 +14,13 @@
 //!   try verifier.expectColorAt(100, 200, 255, 0, 0);
 
 const std = @import("std");
-const zikuli = @import("zikuli");
 
-const x11 = zikuli.x11;
+// XCB C bindings for direct X11 access
+const x11 = @cImport({
+    @cInclude("xcb/xcb.h");
+    @cInclude("xcb/shm.h");
+    @cInclude("xcb/xcb_image.h");
+});
 
 /// Verification utilities for test assertions
 pub const Verifier = struct {

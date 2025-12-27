@@ -12,9 +12,13 @@
 //!   win.map();
 
 const std = @import("std");
-const zikuli = @import("zikuli");
 
-const x11 = zikuli.x11;
+// XCB C bindings for direct X11 access
+const x11 = @cImport({
+    @cInclude("xcb/xcb.h");
+    @cInclude("xcb/shm.h");
+    @cInclude("xcb/xcb_image.h");
+});
 
 /// Test content server for placing content at exact coordinates
 pub const ContentServer = struct {
@@ -50,7 +54,7 @@ pub const ContentServer = struct {
             .allocator = allocator,
             .conn = conn.?,
             .screen = screen.?,
-            .windows = std.ArrayList(Window).init(allocator),
+            .windows = .empty,
             .gc = gc,
         };
     }
@@ -60,7 +64,7 @@ pub const ContentServer = struct {
         for (self.windows.items) |*win| {
             win.destroy();
         }
-        self.windows.deinit();
+        self.windows.deinit(self.allocator);
 
         // Free GC and disconnect
         _ = x11.xcb_free_gc(self.conn, self.gc);
@@ -91,7 +95,7 @@ pub const ContentServer = struct {
             &values,
         );
 
-        const window = try self.windows.addOne();
+        const window = try self.windows.addOne(self.allocator);
         window.* = Window{
             .id = win_id,
             .conn = self.conn,
