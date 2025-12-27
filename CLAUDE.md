@@ -24,7 +24,7 @@
 
 ## Current Phase
 
-**All Phases Complete + Multi-Monitor Support**
+**All Phases Complete + Multi-Monitor Support + Virtual Test Environment**
 
 Completed Phases:
 - Phase 0-4: Core types, geometry, X11 capture, OpenCV template matching
@@ -35,6 +35,7 @@ Completed Phases:
 - Phase 9: High-level API and examples (4 examples working)
 - Phase 10: Real-world automation examples (3 examples verified)
 - Multi-Monitor: XRandR support for per-monitor capture (like SikuliX)
+- Virtual Test Environment: Xvfb-based testing for CI/debugging
 
 ## Decisions
 
@@ -69,6 +70,33 @@ None currently.
 - `Screen.capture()` now captures only that monitor's region, not the full virtual screen
 - `Screen.getMonitorCount()` returns number of connected monitors
 - Test: `zig build test-multimonitor` verifies XRandR enumeration
+
+## Virtual Test Environment
+
+For deterministic, reproducible testing without a physical display:
+
+```bash
+# Install dependencies (one-time)
+sudo apt-get install -y xvfb xdotool xserver-xephyr
+
+# Run virtual tests
+./tests/scripts/run_virtual_tests.sh
+
+# Visual debug mode (see what's happening)
+./tests/scripts/debug_visual.sh
+
+# Build target
+~/.zig/zig build test-virtual
+```
+
+Components:
+- `tests/virtual/harness.zig` - Test orchestration
+- `tests/virtual/content_server.zig` - Places test content at exact pixels
+- `tests/virtual/verification.zig` - Result verification
+- `tests/virtual/test_virtual.zig` - Comprehensive test suite
+- `tests/fixtures/patterns/` - Pre-generated test images
+
+See `docs/VIRTUAL_TEST_ENVIRONMENT.md` for full documentation.
 
 ## Discovered Constraints
 

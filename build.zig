@@ -356,6 +356,52 @@ pub fn build(b: *std.Build) void {
     const test_screenshot_step = b.step("test-screenshot", "Capture and save screenshot for debugging");
     test_screenshot_step.dependOn(&run_test_screenshot.step);
 
+    // ========================================================================
+    // Virtual Test Environment
+    // ========================================================================
+
+    // Virtual test module (for use by test files)
+    const virtual_mod = b.addModule("virtual", .{
+        .root_source_file = b.path("tests/virtual/harness.zig"),
+        .target = target,
+        .link_libc = true,
+    });
+    virtual_mod.addImport("zikuli", mod);
+
+    // Virtual environment tests (as test executable)
+    const test_virtual = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/virtual/test_virtual.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+                .{ .name = "harness", .module = virtual_mod },
+            },
+        }),
+    });
+
+    const run_test_virtual = b.addRunArtifact(test_virtual);
+    const test_virtual_step = b.step("test-virtual", "Run virtual environment tests (requires DISPLAY=:99)");
+    test_virtual_step.dependOn(&run_test_virtual.step);
+
+    // Virtual harness unit tests
+    const virtual_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/virtual/harness.zig"),
+            .target = target,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+
+    const run_virtual_tests = b.addRunArtifact(virtual_tests);
+    const virtual_unit_test_step = b.step("test-virtual-unit", "Run virtual harness unit tests");
+    virtual_unit_test_step.dependOn(&run_virtual_tests.step);
+
     // SikuliX-Style API test (Phase 11)
     const test_sikulix_api = b.addExecutable(.{
         .name = "test_sikulix_api",
