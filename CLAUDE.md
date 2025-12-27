@@ -24,9 +24,15 @@
 
 ## Current Phase
 
-Phase 4: OpenCV Template Matching (completed)
+Phase 7: Region operations integration (completed)
 
-Next: Phase 5: Mouse control via XTest
+Completed Phases:
+- Phase 0-4: Core types, geometry, X11 capture, OpenCV template matching
+- Phase 5: Mouse control via XTest (112 tests passed)
+- Phase 6: Keyboard control via XTest (120 tests passed)
+- Phase 7: Region operations integration (11 tests passed)
+
+Next: Phase 8: OCR with Tesseract
 
 ## Decisions
 
@@ -60,6 +66,7 @@ None currently.
 - OpenCV 4.x C API headers require C++11 (created C++ wrapper to solve)
 - Zig 0.15 deprecated `std.io.getStdOut()` - use `std.fs.File.stdout().deprecatedWriter()`
 - Zig 0.15 strict about parameter shadowing - rename parameters if they shadow other names
+- Zig 0.15 `std.Thread.sleep` replaces `std.time.sleep` in executable contexts
 
 ## User Preferences
 
