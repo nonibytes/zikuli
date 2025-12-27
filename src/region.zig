@@ -1,0 +1,526 @@
+//! Region type for Zikuli
+//!
+//! A Region represents a rectangular area that can be used for
+//! find operations, mouse actions, and screen capture.
+//!
+//! Phase 1: Basic geometry only (no screen operations yet)
+//! Later phases will add: find(), click(), type(), wait(), etc.
+//!
+//! Based on SikuliX Region.java analysis:
+//! - Region has x, y, w, h (width/height)
+//! - Region operations return Match or list of Match
+//! - Region can be offset, resized, and split
+//! - Default autoWaitTimeout is 3.0 seconds
+//! - Default similarity is 0.7
+
+const std = @import("std");
+const geometry = @import("geometry.zig");
+const Point = geometry.Point;
+const Location = geometry.Location;
+const Rectangle = geometry.Rectangle;
+
+/// Default wait timeout for find operations (seconds)
+pub const DEFAULT_AUTO_WAIT_TIMEOUT: f64 = 3.0;
+
+/// Default highlight duration (seconds)
+pub const DEFAULT_HIGHLIGHT_DURATION: f64 = 2.0;
+
+/// A Region represents a rectangular screen area for automation operations
+pub const Region = struct {
+    /// The bounding rectangle
+    rect: Rectangle,
+
+    /// Timeout for find operations (seconds)
+    auto_wait_timeout: f64,
+
+    /// Screen index (for multi-monitor support)
+    screen_id: i32,
+
+    /// Create a region from a rectangle
+    pub fn init(rect: Rectangle) Region {
+        return .{
+            .rect = rect,
+            .auto_wait_timeout = DEFAULT_AUTO_WAIT_TIMEOUT,
+            .screen_id = 0,
+        };
+    }
+
+    /// Create a region from position and size
+    pub fn initAt(pos_x: i32, pos_y: i32, w: u32, h: u32) Region {
+        return init(Rectangle.init(pos_x, pos_y, w, h));
+    }
+
+    /// Create a region from two corner points
+    pub fn fromPoints(p1: Point, p2: Point) Region {
+        return init(Rectangle.fromPoints(p1, p2));
+    }
+
+    // ========================================================================
+    // Position and Size Accessors
+    // ========================================================================
+
+    pub fn x(self: Region) i32 {
+        return self.rect.x;
+    }
+
+    pub fn y(self: Region) i32 {
+        return self.rect.y;
+    }
+
+    pub fn width(self: Region) u32 {
+        return self.rect.width;
+    }
+
+    pub fn height(self: Region) u32 {
+        return self.rect.height;
+    }
+
+    pub fn right(self: Region) i32 {
+        return self.rect.right();
+    }
+
+    pub fn bottom(self: Region) i32 {
+        return self.rect.bottom();
+    }
+
+    /// Set x position
+    pub fn setX(self: *Region, new_x: i32) void {
+        self.rect.x = new_x;
+    }
+
+    /// Set y position
+    pub fn setY(self: *Region, new_y: i32) void {
+        self.rect.y = new_y;
+    }
+
+    /// Set width (minimum 1)
+    pub fn setWidth(self: *Region, new_width: u32) void {
+        self.rect.width = @max(1, new_width);
+    }
+
+    /// Set height (minimum 1)
+    pub fn setHeight(self: *Region, new_height: u32) void {
+        self.rect.height = @max(1, new_height);
+    }
+
+    // ========================================================================
+    // Geometry Operations
+    // ========================================================================
+
+    /// Get center point
+    pub fn center(self: Region) Point {
+        return self.rect.center();
+    }
+
+    /// Get center as location
+    pub fn centerLocation(self: Region) Location {
+        return self.rect.centerLocation();
+    }
+
+    /// Get top-left corner
+    pub fn topLeft(self: Region) Point {
+        return self.rect.topLeft();
+    }
+
+    /// Get top-right corner
+    pub fn topRight(self: Region) Point {
+        return self.rect.topRight();
+    }
+
+    /// Get bottom-left corner
+    pub fn bottomLeft(self: Region) Point {
+        return self.rect.bottomLeft();
+    }
+
+    /// Get bottom-right corner
+    pub fn bottomRight(self: Region) Point {
+        return self.rect.bottomRight();
+    }
+
+    /// Get area in pixels
+    pub fn area(self: Region) u64 {
+        return self.rect.area();
+    }
+
+    /// Check if point is inside region
+    pub fn contains(self: Region, p: Point) bool {
+        return self.rect.contains(p);
+    }
+
+    /// Check if another region is fully contained
+    pub fn containsRegion(self: Region, other: Region) bool {
+        return self.rect.containsRect(other.rect);
+    }
+
+    /// Check if regions intersect
+    pub fn intersects(self: Region, other: Region) bool {
+        return self.rect.intersects(other.rect);
+    }
+
+    // ========================================================================
+    // Region Transformations (SikuliX-style)
+    // ========================================================================
+
+    /// Offset region position
+    pub fn offset(self: Region, dx: i32, dy: i32) Region {
+        var result = self;
+        result.rect = self.rect.offset(dx, dy);
+        return result;
+    }
+
+    /// Expand region by amount on all sides
+    pub fn grow(self: Region, amount: i32) Region {
+        var result = self;
+        result.rect = self.rect.expand(amount);
+        return result;
+    }
+
+    /// Expand region by different amounts
+    pub fn growBy(self: Region, left_amt: i32, top_amt: i32, right_amt: i32, bottom_amt: i32) Region {
+        const new_x = self.rect.x -| left_amt;
+        const new_y = self.rect.y -| top_amt;
+        const new_w = self.rect.width +| @as(u32, @intCast(@max(0, left_amt))) +| @as(u32, @intCast(@max(0, right_amt)));
+        const new_h = self.rect.height +| @as(u32, @intCast(@max(0, top_amt))) +| @as(u32, @intCast(@max(0, bottom_amt)));
+
+        var result = self;
+        result.rect = Rectangle.init(new_x, new_y, new_w, new_h);
+        return result;
+    }
+
+    /// Get the left portion of the region
+    pub fn left(self: Region, amount: u32) Region {
+        var result = self;
+        result.rect.width = @min(amount, self.rect.width);
+        return result;
+    }
+
+    /// Get the right portion of the region
+    pub fn rightPortion(self: Region, amount: u32) Region {
+        const capped = @min(amount, self.rect.width);
+        var result = self;
+        result.rect.x = self.rect.x +| @as(i32, @intCast(self.rect.width - capped));
+        result.rect.width = capped;
+        return result;
+    }
+
+    /// Get the top portion of the region
+    pub fn top(self: Region, amount: u32) Region {
+        var result = self;
+        result.rect.height = @min(amount, self.rect.height);
+        return result;
+    }
+
+    /// Get the bottom portion of the region
+    pub fn bottomPortion(self: Region, amount: u32) Region {
+        const capped = @min(amount, self.rect.height);
+        var result = self;
+        result.rect.y = self.rect.y +| @as(i32, @intCast(self.rect.height - capped));
+        result.rect.height = capped;
+        return result;
+    }
+
+    /// Get region above this one
+    pub fn above(self: Region, distance: u32) Region {
+        var result = self;
+        result.rect.y = self.rect.y -| @as(i32, @intCast(distance));
+        result.rect.height = distance;
+        return result;
+    }
+
+    /// Get region below this one
+    pub fn below(self: Region, distance: u32) Region {
+        var result = self;
+        result.rect.y = self.rect.bottom();
+        result.rect.height = distance;
+        return result;
+    }
+
+    /// Get region to the left of this one
+    pub fn leftOf(self: Region, distance: u32) Region {
+        var result = self;
+        result.rect.x = self.rect.x -| @as(i32, @intCast(distance));
+        result.rect.width = distance;
+        return result;
+    }
+
+    /// Get region to the right of this one
+    pub fn rightOf(self: Region, distance: u32) Region {
+        var result = self;
+        result.rect.x = self.rect.right();
+        result.rect.width = distance;
+        return result;
+    }
+
+    /// Get intersection with another region
+    pub fn intersection(self: Region, other: Region) Region {
+        var result = self;
+        result.rect = self.rect.intersection(other.rect);
+        return result;
+    }
+
+    /// Get bounding region of two regions (union)
+    pub fn union_(self: Region, other: Region) Region {
+        var result = self;
+        result.rect = self.rect.boundingRect(other.rect);
+        return result;
+    }
+
+    /// Set auto wait timeout
+    pub fn withTimeout(self: Region, timeout: f64) Region {
+        var result = self;
+        result.auto_wait_timeout = timeout;
+        return result;
+    }
+
+    /// Check if region is empty
+    pub fn isEmpty(self: Region) bool {
+        return self.rect.isEmpty();
+    }
+
+    /// Check equality
+    pub fn eql(self: Region, other: Region) bool {
+        return self.rect.eql(other.rect);
+    }
+
+    pub fn format(
+        self: Region,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+        try writer.print("Region[{d},{d} {d}x{d}]S({d})", .{
+            self.rect.x,
+            self.rect.y,
+            self.rect.width,
+            self.rect.height,
+            self.screen_id,
+        });
+    }
+};
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
+test "Region: basic construction" {
+    const r = Region.initAt(100, 200, 300, 400);
+    try std.testing.expectEqual(@as(i32, 100), r.x());
+    try std.testing.expectEqual(@as(i32, 200), r.y());
+    try std.testing.expectEqual(@as(u32, 300), r.width());
+    try std.testing.expectEqual(@as(u32, 400), r.height());
+    try std.testing.expectApproxEqAbs(DEFAULT_AUTO_WAIT_TIMEOUT, r.auto_wait_timeout, 0.0001);
+}
+
+test "Region: from rectangle" {
+    const rect = Rectangle.init(10, 20, 100, 50);
+    const r = Region.init(rect);
+    try std.testing.expect(r.rect.eql(rect));
+}
+
+test "Region: from points" {
+    const r = Region.fromPoints(Point.init(0, 0), Point.init(100, 50));
+    try std.testing.expectEqual(@as(i32, 0), r.x());
+    try std.testing.expectEqual(@as(i32, 0), r.y());
+    try std.testing.expectEqual(@as(u32, 100), r.width());
+    try std.testing.expectEqual(@as(u32, 50), r.height());
+}
+
+test "Region: center" {
+    const r = Region.initAt(100, 200, 50, 30);
+    const c = r.center();
+    try std.testing.expectEqual(@as(i32, 125), c.x);
+    try std.testing.expectEqual(@as(i32, 215), c.y);
+}
+
+test "Region: corners" {
+    const r = Region.initAt(100, 200, 50, 30);
+
+    try std.testing.expect(r.topLeft().eql(Point.init(100, 200)));
+    try std.testing.expect(r.topRight().eql(Point.init(150, 200)));
+    try std.testing.expect(r.bottomLeft().eql(Point.init(100, 230)));
+    try std.testing.expect(r.bottomRight().eql(Point.init(150, 230)));
+}
+
+test "Region: contains point" {
+    const r = Region.initAt(100, 200, 50, 30);
+
+    try std.testing.expect(r.contains(Point.init(110, 210)));
+    try std.testing.expect(r.contains(Point.init(100, 200))); // Top-left (inclusive)
+    try std.testing.expect(!r.contains(Point.init(150, 200))); // Right edge (exclusive)
+    try std.testing.expect(!r.contains(Point.init(50, 210))); // Outside left
+}
+
+test "Region: offset" {
+    const r = Region.initAt(100, 200, 50, 30);
+    const moved = r.offset(10, -20);
+
+    try std.testing.expectEqual(@as(i32, 110), moved.x());
+    try std.testing.expectEqual(@as(i32, 180), moved.y());
+    try std.testing.expectEqual(@as(u32, 50), moved.width()); // Size unchanged
+}
+
+test "Region: grow" {
+    const r = Region.initAt(100, 200, 50, 30);
+    const grown = r.grow(10);
+
+    try std.testing.expectEqual(@as(i32, 90), grown.x());
+    try std.testing.expectEqual(@as(i32, 190), grown.y());
+    try std.testing.expectEqual(@as(u32, 70), grown.width());
+    try std.testing.expectEqual(@as(u32, 50), grown.height());
+}
+
+test "Region: left portion" {
+    const r = Region.initAt(100, 200, 100, 50);
+    const left_portion = r.left(30);
+
+    try std.testing.expectEqual(@as(i32, 100), left_portion.x());
+    try std.testing.expectEqual(@as(u32, 30), left_portion.width());
+}
+
+test "Region: right portion" {
+    const r = Region.initAt(100, 200, 100, 50);
+    const right_portion = r.rightPortion(30);
+
+    try std.testing.expectEqual(@as(i32, 170), right_portion.x());
+    try std.testing.expectEqual(@as(u32, 30), right_portion.width());
+}
+
+test "Region: top portion" {
+    const r = Region.initAt(100, 200, 100, 50);
+    const top_portion = r.top(20);
+
+    try std.testing.expectEqual(@as(i32, 200), top_portion.y());
+    try std.testing.expectEqual(@as(u32, 20), top_portion.height());
+}
+
+test "Region: bottom portion" {
+    const r = Region.initAt(100, 200, 100, 50);
+    const bottom_portion = r.bottomPortion(20);
+
+    try std.testing.expectEqual(@as(i32, 230), bottom_portion.y());
+    try std.testing.expectEqual(@as(u32, 20), bottom_portion.height());
+}
+
+test "Region: above" {
+    const r = Region.initAt(100, 200, 100, 50);
+    const above_region = r.above(30);
+
+    try std.testing.expectEqual(@as(i32, 170), above_region.y());
+    try std.testing.expectEqual(@as(u32, 30), above_region.height());
+    try std.testing.expectEqual(@as(u32, 100), above_region.width()); // Same width
+}
+
+test "Region: below" {
+    const r = Region.initAt(100, 200, 100, 50);
+    const below_region = r.below(30);
+
+    try std.testing.expectEqual(@as(i32, 250), below_region.y());
+    try std.testing.expectEqual(@as(u32, 30), below_region.height());
+}
+
+test "Region: leftOf" {
+    const r = Region.initAt(100, 200, 100, 50);
+    const left_of = r.leftOf(30);
+
+    try std.testing.expectEqual(@as(i32, 70), left_of.x());
+    try std.testing.expectEqual(@as(u32, 30), left_of.width());
+    try std.testing.expectEqual(@as(u32, 50), left_of.height()); // Same height
+}
+
+test "Region: rightOf" {
+    const r = Region.initAt(100, 200, 100, 50);
+    const right_of = r.rightOf(30);
+
+    try std.testing.expectEqual(@as(i32, 200), right_of.x());
+    try std.testing.expectEqual(@as(u32, 30), right_of.width());
+}
+
+test "Region: intersection" {
+    const r1 = Region.initAt(0, 0, 100, 100);
+    const r2 = Region.initAt(50, 50, 100, 100);
+
+    const inter = r1.intersection(r2);
+    try std.testing.expectEqual(@as(i32, 50), inter.x());
+    try std.testing.expectEqual(@as(i32, 50), inter.y());
+    try std.testing.expectEqual(@as(u32, 50), inter.width());
+    try std.testing.expectEqual(@as(u32, 50), inter.height());
+}
+
+test "Region: union" {
+    const r1 = Region.initAt(0, 0, 50, 50);
+    const r2 = Region.initAt(100, 100, 50, 50);
+
+    const u = r1.union_(r2);
+    try std.testing.expectEqual(@as(i32, 0), u.x());
+    try std.testing.expectEqual(@as(i32, 0), u.y());
+    try std.testing.expectEqual(@as(u32, 150), u.width());
+    try std.testing.expectEqual(@as(u32, 150), u.height());
+}
+
+test "Region: withTimeout" {
+    const r = Region.initAt(0, 0, 100, 100).withTimeout(5.0);
+    try std.testing.expectApproxEqAbs(@as(f64, 5.0), r.auto_wait_timeout, 0.0001);
+}
+
+test "Region: setters" {
+    var r = Region.initAt(100, 200, 50, 30);
+
+    r.setX(150);
+    try std.testing.expectEqual(@as(i32, 150), r.x());
+
+    r.setY(250);
+    try std.testing.expectEqual(@as(i32, 250), r.y());
+
+    r.setWidth(80);
+    try std.testing.expectEqual(@as(u32, 80), r.width());
+
+    r.setHeight(60);
+    try std.testing.expectEqual(@as(u32, 60), r.height());
+}
+
+test "Region: minimum width/height" {
+    var r = Region.initAt(100, 200, 50, 30);
+
+    // Setting to 0 should be capped to 1
+    r.setWidth(0);
+    try std.testing.expectEqual(@as(u32, 1), r.width());
+
+    r.setHeight(0);
+    try std.testing.expectEqual(@as(u32, 1), r.height());
+}
+
+test "Region: negative coordinates" {
+    const r = Region.initAt(-100, -200, 300, 400);
+    try std.testing.expectEqual(@as(i32, -100), r.x());
+    try std.testing.expectEqual(@as(i32, -200), r.y());
+    try std.testing.expect(r.contains(Point.init(0, 0)));
+}
+
+test "Region: containsRegion" {
+    const outer = Region.initAt(0, 0, 100, 100);
+    const inner = Region.initAt(10, 10, 50, 50);
+    const overlapping = Region.initAt(50, 50, 100, 100);
+
+    try std.testing.expect(outer.containsRegion(inner));
+    try std.testing.expect(!outer.containsRegion(overlapping));
+}
+
+test "Region: intersects" {
+    const r1 = Region.initAt(0, 0, 100, 100);
+    const r2 = Region.initAt(50, 50, 100, 100);
+    const r3 = Region.initAt(200, 200, 50, 50);
+
+    try std.testing.expect(r1.intersects(r2));
+    try std.testing.expect(!r1.intersects(r3));
+}
+
+test "Region: equality" {
+    const r1 = Region.initAt(100, 200, 50, 30);
+    const r2 = Region.initAt(100, 200, 50, 30);
+    const r3 = Region.initAt(100, 200, 51, 30);
+
+    try std.testing.expect(r1.eql(r2));
+    try std.testing.expect(!r1.eql(r3));
+}

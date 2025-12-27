@@ -6,6 +6,59 @@ Re-implement SikuliX as **Zikuli** - a native Zig library for visual GUI automat
 
 ---
 
+## Development Methodology
+
+### Source-First Analysis Protocol
+
+**BEFORE implementing ANY feature, analyze the SikuliX source code:**
+
+1. **Read the Java source** in `/tmp/temp-github-repos/SikuliX1/`
+2. **Read the C++ native code** in `/tmp/temp-github-repos/sikuli-original/sikuli-script/src/main/native/`
+3. **Document key algorithms, constants, and edge cases**
+4. **Identify all behavior that must be preserved**
+5. **Only THEN begin Zig implementation**
+
+### Session Context Recovery
+
+Claude Code sessions may lose context due to conversation clearing/compaction. To recover previous work:
+
+```bash
+# Get session file path
+SESSION_FILE="$CLAUDE_SESSIONS_DATA_PATH/$(cat $CLAUDE_SESSION_FILE).jsonl"
+
+# View last 5 user messages
+grep '"type":"user"' "$SESSION_FILE" | grep -v '"tool_result"' | tail -5 | \
+  jq -r 'if .message.content | type == "string" then .message.content else .message.content[0].text // empty end' 2>/dev/null
+
+# View last 5 assistant responses
+grep '"type":"assistant"' "$SESSION_FILE" | tail -5 | \
+  jq -r '[.message.content[] | select(.type=="text") | .text] | join("\n")' 2>/dev/null | head -200
+
+# Check for summary (indicates compaction happened)
+grep '"type":"summary"' "$SESSION_FILE" | jq -r '.summary' 2>/dev/null
+```
+
+**Use this proactively when:**
+- Resuming work after a break
+- Context seems incomplete
+- Need to verify previous decisions
+- Recovering file paths, variable names, or code snippets
+
+### Verification-First Development
+
+For each feature:
+```
+1. Analyze SikuliX source code FIRST
+2. Write verification tests (must initially FAIL)
+3. Implement the feature
+4. Run tests (must PASS)
+5. Run full regression (NO regressions allowed)
+6. Manual verification with actual execution
+7. Commit with evidence
+```
+
+---
+
 ## SikuliX Architecture Analysis (Completed)
 
 ### Core Components Analyzed
