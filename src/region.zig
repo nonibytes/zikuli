@@ -458,26 +458,15 @@ pub const Region = struct {
     // ========================================================================
 
     /// Find an image pattern - throws FindFailed if not found (SikuliX-style)
-    /// Unlike findImage() which returns null, this throws an error if not found.
+    /// NOTE: Unlike wait(), find() does NOT wait/retry. It does a single immediate search.
+    /// This matches SikuliX behavior: find() is "waiting 0 secs" (Region.java line 2280).
+    /// Use wait() if you need to wait for the pattern to appear.
     /// Use exists() or findImage() if you want to check without throwing.
     pub fn find(self: Region, allocator: std.mem.Allocator, template: *const Image) !Match {
-        const start = std.time.milliTimestamp();
-        const timeout_ms: i64 = @intFromFloat(self.auto_wait_timeout * 1000.0);
-
-        while (true) {
-            if (try self.findImage(allocator, template)) |match_result| {
-                return match_result;
-            }
-
-            const elapsed = std.time.milliTimestamp() - start;
-            if (elapsed >= timeout_ms) {
-                // FindFailed - like SikuliX
-                return error.FindFailed;
-            }
-
-            // Small delay between retries (like SikuliX WaitScanRate)
-            std.Thread.sleep(100 * std.time.ns_per_ms);
+        if (try self.findImage(allocator, template)) |match_result| {
+            return match_result;
         }
+        return error.FindFailed;
     }
 
     /// Find all occurrences of an image pattern
@@ -528,13 +517,11 @@ pub const Region = struct {
     }
 
     /// Wait for target to vanish (SikuliX-style)
-    /// Returns true if vanished, throws Timeout if still present.
+    /// Returns true if vanished within timeout, false if still present.
+    /// This matches SikuliX behavior: waitVanish() returns boolean, not exception.
     pub fn waitVanish(self: Region, allocator: std.mem.Allocator, template: *const Image, timeout_sec: ?f64) !bool {
         const timeout = timeout_sec orelse self.auto_wait_timeout;
-        if (try self.waitVanishImage(allocator, template, timeout)) {
-            return true;
-        }
-        return error.Timeout;
+        return self.waitVanishImage(allocator, template, timeout);
     }
 
     /// Click on target (SikuliX-style)
@@ -548,24 +535,50 @@ pub const Region = struct {
     }
 
     /// Click with keyboard modifiers (Ctrl+Click, Shift+Click, etc.)
+    /// Uses errdefer to ensure modifiers are released even if click fails.
     pub fn clickWithModifiers(self: Region, allocator: std.mem.Allocator, template: *const Image, modifiers: u32) !Match {
         const match_result = try self.find(allocator, template);
         const target = match_result.center();
 
-        // Press modifiers
-        if (modifiers & Modifier.CTRL != 0) try Keyboard.keyDown(KeySym.Control_L);
-        if (modifiers & Modifier.SHIFT != 0) try Keyboard.keyDown(KeySym.Shift_L);
-        if (modifiers & Modifier.ALT != 0) try Keyboard.keyDown(KeySym.Alt_L);
-        if (modifiers & Modifier.META != 0) try Keyboard.keyDown(KeySym.Meta_L);
+        // Press modifiers with errdefer cleanup to prevent stuck keys
+        var ctrl_pressed = false;
+        var shift_pressed = false;
+        var alt_pressed = false;
+        var meta_pressed = false;
 
-        // Click
+        errdefer {
+            // Release any modifiers that were pressed if we error out
+            if (meta_pressed) Keyboard.keyUp(KeySym.Meta_L) catch {};
+            if (alt_pressed) Keyboard.keyUp(KeySym.Alt_L) catch {};
+            if (shift_pressed) Keyboard.keyUp(KeySym.Shift_L) catch {};
+            if (ctrl_pressed) Keyboard.keyUp(KeySym.Control_L) catch {};
+        }
+
+        if (modifiers & Modifier.CTRL != 0) {
+            try Keyboard.keyDown(KeySym.Control_L);
+            ctrl_pressed = true;
+        }
+        if (modifiers & Modifier.SHIFT != 0) {
+            try Keyboard.keyDown(KeySym.Shift_L);
+            shift_pressed = true;
+        }
+        if (modifiers & Modifier.ALT != 0) {
+            try Keyboard.keyDown(KeySym.Alt_L);
+            alt_pressed = true;
+        }
+        if (modifiers & Modifier.META != 0) {
+            try Keyboard.keyDown(KeySym.Meta_L);
+            meta_pressed = true;
+        }
+
+        // Click (if this fails, errdefer releases modifiers)
         try Mouse.clickAt(target.x, target.y, .left);
 
-        // Release modifiers
-        if (modifiers & Modifier.META != 0) try Keyboard.keyUp(KeySym.Meta_L);
-        if (modifiers & Modifier.ALT != 0) try Keyboard.keyUp(KeySym.Alt_L);
-        if (modifiers & Modifier.SHIFT != 0) try Keyboard.keyUp(KeySym.Shift_L);
-        if (modifiers & Modifier.CTRL != 0) try Keyboard.keyUp(KeySym.Control_L);
+        // Release modifiers (success path)
+        if (meta_pressed) try Keyboard.keyUp(KeySym.Meta_L);
+        if (alt_pressed) try Keyboard.keyUp(KeySym.Alt_L);
+        if (shift_pressed) try Keyboard.keyUp(KeySym.Shift_L);
+        if (ctrl_pressed) try Keyboard.keyUp(KeySym.Control_L);
 
         return match_result;
     }
@@ -617,23 +630,50 @@ pub const Region = struct {
     }
 
     /// Type text with modifiers (e.g., Ctrl+A to select all)
+    /// Uses errdefer to ensure modifiers are released even if typing fails.
     pub fn typeWithModifiers(self: Region, text: []const u8, modifiers: u32) !void {
         try self.clickCenter();
         std.Thread.sleep(50 * std.time.ns_per_ms);
 
-        // Press modifiers
-        if (modifiers & Modifier.CTRL != 0) try Keyboard.keyDown(KeySym.Control_L);
-        if (modifiers & Modifier.SHIFT != 0) try Keyboard.keyDown(KeySym.Shift_L);
-        if (modifiers & Modifier.ALT != 0) try Keyboard.keyDown(KeySym.Alt_L);
-        if (modifiers & Modifier.META != 0) try Keyboard.keyDown(KeySym.Meta_L);
+        // Press modifiers with errdefer cleanup to prevent stuck keys
+        var ctrl_pressed = false;
+        var shift_pressed = false;
+        var alt_pressed = false;
+        var meta_pressed = false;
 
+        errdefer {
+            // Release any modifiers that were pressed if we error out
+            if (meta_pressed) Keyboard.keyUp(KeySym.Meta_L) catch {};
+            if (alt_pressed) Keyboard.keyUp(KeySym.Alt_L) catch {};
+            if (shift_pressed) Keyboard.keyUp(KeySym.Shift_L) catch {};
+            if (ctrl_pressed) Keyboard.keyUp(KeySym.Control_L) catch {};
+        }
+
+        if (modifiers & Modifier.CTRL != 0) {
+            try Keyboard.keyDown(KeySym.Control_L);
+            ctrl_pressed = true;
+        }
+        if (modifiers & Modifier.SHIFT != 0) {
+            try Keyboard.keyDown(KeySym.Shift_L);
+            shift_pressed = true;
+        }
+        if (modifiers & Modifier.ALT != 0) {
+            try Keyboard.keyDown(KeySym.Alt_L);
+            alt_pressed = true;
+        }
+        if (modifiers & Modifier.META != 0) {
+            try Keyboard.keyDown(KeySym.Meta_L);
+            meta_pressed = true;
+        }
+
+        // Type text (if this fails, errdefer releases modifiers)
         try Keyboard.typeText(text);
 
-        // Release modifiers
-        if (modifiers & Modifier.META != 0) try Keyboard.keyUp(KeySym.Meta_L);
-        if (modifiers & Modifier.ALT != 0) try Keyboard.keyUp(KeySym.Alt_L);
-        if (modifiers & Modifier.SHIFT != 0) try Keyboard.keyUp(KeySym.Shift_L);
-        if (modifiers & Modifier.CTRL != 0) try Keyboard.keyUp(KeySym.Control_L);
+        // Release modifiers (success path)
+        if (meta_pressed) try Keyboard.keyUp(KeySym.Meta_L);
+        if (alt_pressed) try Keyboard.keyUp(KeySym.Alt_L);
+        if (shift_pressed) try Keyboard.keyUp(KeySym.Shift_L);
+        if (ctrl_pressed) try Keyboard.keyUp(KeySym.Control_L);
     }
 
     /// Press a key or key combination (SikuliX-style hotkey)

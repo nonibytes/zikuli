@@ -67,30 +67,31 @@ pub const FindFailed = struct {
 
 /// Find failed response - how to handle FindFailed errors
 /// Matches SikuliX FindFailedResponse enum
-pub const FindFailedResponse = enum {
+/// Uses u8 backing for atomic compatibility
+pub const FindFailedResponse = enum(u8) {
     /// Abort immediately (throw/return error)
-    abort,
+    abort = 0,
     /// Skip and continue (return null)
-    skip,
+    skip = 1,
     /// Prompt user for action (not implemented in CLI)
-    prompt,
+    prompt = 2,
     /// Retry the find operation
-    retry,
+    retry = 3,
     /// Call custom handler
-    handle,
+    handle = 4,
 };
 
-/// Global find failed response setting
-var global_find_failed_response: FindFailedResponse = .abort;
+/// Global find failed response setting (thread-safe via atomic)
+var global_find_failed_response: std.atomic.Value(FindFailedResponse) = std.atomic.Value(FindFailedResponse).init(.abort);
 
-/// Set global find failed response
+/// Set global find failed response (thread-safe)
 pub fn setFindFailedResponse(response: FindFailedResponse) void {
-    global_find_failed_response = response;
+    global_find_failed_response.store(response, .seq_cst);
 }
 
-/// Get global find failed response
+/// Get global find failed response (thread-safe)
 pub fn getFindFailedResponse() FindFailedResponse {
-    return global_find_failed_response;
+    return global_find_failed_response.load(.seq_cst);
 }
 
 /// Timeout error - when operations exceed their time limit

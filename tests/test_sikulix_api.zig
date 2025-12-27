@@ -138,23 +138,21 @@ pub fn main() !void {
     // Test 4: waitVanish() - pattern should NOT vanish (screen is static)
     // ========================================================================
     try stdout.print("Test 4: Region.waitVanish() - pattern should not vanish\n", .{});
-    test4: {
+    {
         const vanished = screen_region.waitVanish(allocator, &pattern_image, 0.3) catch |err| {
-            // Expected: Timeout error because pattern doesn't vanish
-            if (err == error.Timeout) {
-                try stdout.print("  PASS: Correctly got Timeout (pattern still present)\n\n", .{});
-                tests_passed += 1;
-            } else {
-                try stdout.print("  FAIL: Unexpected error: {}\n\n", .{err});
-                tests_failed += 1;
-            }
-            // Continue to next test
-            break :test4;
+            try stdout.print("  FAIL: waitVanish() threw unexpected error: {}\n\n", .{err});
+            tests_failed += 1;
+            return err;
         };
-        _ = vanished;
-        // If we get here, it means waitVanish returned true (pattern vanished)
-        // This is unexpected for a static screen
-        try stdout.print("  WARNING: Pattern vanished unexpectedly (screen should be static)\n\n", .{});
+
+        // SikuliX behavior: returns false if pattern still present after timeout
+        if (!vanished) {
+            try stdout.print("  PASS: Correctly returned false (pattern still present)\n\n", .{});
+            tests_passed += 1;
+        } else {
+            try stdout.print("  FAIL: Pattern vanished unexpectedly (screen should be static)\n\n", .{});
+            tests_failed += 1;
+        }
     }
 
     // ========================================================================
