@@ -83,16 +83,18 @@ pub const KeySym = keyboard.KeySym;
 pub const KeyModifier = keyboard.Modifier;
 
 // ============================================================================
-// Modules to be added in later phases
+// OCR Modules (Phase 8)
 // ============================================================================
 
-// Phase 6: Keyboard control
-// pub const keyboard = @import("input/keyboard.zig");
-// pub const Keyboard = keyboard.Keyboard;
+pub const ocr = @import("ocr.zig");
+pub const tesseract = @import("ocr/tesseract.zig");
 
-// Phase 8: OCR
-// pub const ocr = @import("ocr.zig");
-// pub const OCR = ocr.OCR;
+// Re-export OCR types
+pub const OCR = ocr.OCR;
+pub const OcrPageSegMode = ocr.PageSegMode;
+pub const OcrEngineMode = ocr.OcrEngineMode;
+pub const OcrWord = ocr.Word;
+pub const OcrLine = ocr.Line;
 
 // ============================================================================
 // Constants (matching SikuliX Settings)
@@ -157,4 +159,6 @@ test {
     _ = image;
     _ = xtest;
     _ = keyboard;
+    _ = ocr;
+    _ = tesseract;
 }

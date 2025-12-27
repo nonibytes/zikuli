@@ -70,6 +70,10 @@ pub fn build(b: *std.Build) void {
     // Link C++ runtime
     mod.linkSystemLibrary("stdc++", .{});
 
+    // Link Tesseract OCR and Leptonica for text recognition (Phase 8)
+    mod.linkSystemLibrary("tesseract", .{});
+    mod.linkSystemLibrary("lept", .{});
+
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
     // to the module defined above, it's sometimes preferable to split business
@@ -276,4 +280,22 @@ pub fn build(b: *std.Build) void {
     const run_test_region_ops = b.addRunArtifact(test_region_ops);
     const test_region_ops_step = b.step("test-region-ops", "Run Region operations integration test (Phase 7)");
     test_region_ops_step.dependOn(&run_test_region_ops.step);
+
+    // Test OCR executable for verifying Tesseract integration (Phase 8)
+    const test_ocr = b.addExecutable(.{
+        .name = "test_ocr",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_ocr.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_ocr);
+
+    const run_test_ocr = b.addRunArtifact(test_ocr);
+    const test_ocr_step = b.step("test-ocr", "Run Tesseract OCR integration test (Phase 8)");
+    test_ocr_step.dependOn(&run_test_ocr.step);
 }

@@ -147,21 +147,22 @@ pub const Finder = struct {
 
     /// Find all matches with specific threshold
     pub fn findAllWithThreshold(self: *Finder, template: *const Image, threshold: f64) ![]Match {
-        var matches = std.ArrayList(Match).init(self.allocator);
-        errdefer matches.deinit();
+        // Use unmanaged ArrayList pattern for Zig 0.15
+        var matches = std.ArrayList(Match).empty;
+        errdefer matches.deinit(self.allocator);
 
         // Validate sizes
         if (template.width > self.source.width or template.height > self.source.height) {
-            return matches.toOwnedSlice();
+            return matches.toOwnedSlice(self.allocator);
         }
 
         if (template.width == 0 or template.height == 0) {
-            return matches.toOwnedSlice();
+            return matches.toOwnedSlice(self.allocator);
         }
 
         // Create OpenCV matrices
-        const src_mat = self.getSourceMat() orelse return matches.toOwnedSlice();
-        const tmpl_mat = createMatFromImage(template) orelse return matches.toOwnedSlice();
+        const src_mat = self.getSourceMat() orelse return matches.toOwnedSlice(self.allocator);
+        const tmpl_mat = createMatFromImage(template) orelse return matches.toOwnedSlice(self.allocator);
         defer {
             var mat_ptr: ?opencv.Mat = tmpl_mat;
             opencv.releaseMat(&mat_ptr);
@@ -170,7 +171,7 @@ pub const Finder = struct {
         // Create result matrix
         const result_rows: c_int = @intCast(self.source.height - template.height + 1);
         const result_cols: c_int = @intCast(self.source.width - template.width + 1);
-        const result_mat = opencv.createMat(result_rows, result_cols, opencv.MatType.CV_32FC1) orelse return matches.toOwnedSlice();
+        const result_mat = opencv.createMat(result_rows, result_cols, opencv.MatType.CV_32FC1) orelse return matches.toOwnedSlice(self.allocator);
         defer {
             var mat_ptr: ?opencv.Mat = result_mat;
             opencv.releaseMat(&mat_ptr);
@@ -186,7 +187,7 @@ pub const Finder = struct {
 
         // Perform template matching
         if (!opencv.matchTemplate(src_mat, tmpl_mat, result_mat, method)) {
-            return matches.toOwnedSlice();
+            return matches.toOwnedSlice(self.allocator);
         }
 
         // Calculate erase margin for match suppression
@@ -214,7 +215,7 @@ pub const Finder = struct {
                 score,
             );
             m.index = index;
-            try matches.append(m);
+            try matches.append(self.allocator, m);
             index += 1;
 
             // Suppress this match region in result matrix
@@ -232,7 +233,7 @@ pub const Finder = struct {
             if (index >= 1000) break;
         }
 
-        return matches.toOwnedSlice();
+        return matches.toOwnedSlice(self.allocator);
     }
 
     /// Get or create OpenCV matrix for source image

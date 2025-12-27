@@ -24,15 +24,16 @@
 
 ## Current Phase
 
-Phase 7: Region operations integration (completed)
+Phase 8: OCR with Tesseract (completed)
 
 Completed Phases:
 - Phase 0-4: Core types, geometry, X11 capture, OpenCV template matching
 - Phase 5: Mouse control via XTest (112 tests passed)
 - Phase 6: Keyboard control via XTest (120 tests passed)
 - Phase 7: Region operations integration (11 tests passed)
+- Phase 8: OCR with Tesseract (9 tests passed, 400 words detected)
 
-Next: Phase 8: OCR with Tesseract
+Next: Phase 9: High-level API and examples
 
 ## Decisions
 
@@ -67,6 +68,7 @@ None currently.
 - Zig 0.15 deprecated `std.io.getStdOut()` - use `std.fs.File.stdout().deprecatedWriter()`
 - Zig 0.15 strict about parameter shadowing - rename parameters if they shadow other names
 - Zig 0.15 `std.Thread.sleep` replaces `std.time.sleep` in executable contexts
+- Zig 0.15 `std.ArrayList(T)` is now unmanaged: use `.empty` instead of `.init(allocator)`, pass allocator to `append()`, `deinit()`, `toOwnedSlice()`
 
 ## User Preferences
 
