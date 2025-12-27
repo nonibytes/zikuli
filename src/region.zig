@@ -19,6 +19,19 @@ const Point = geometry.Point;
 const Location = geometry.Location;
 const Rectangle = geometry.Rectangle;
 
+// Phase 7: Integration imports
+const screen_mod = @import("screen.zig");
+const image_mod = @import("image.zig");
+const finder_mod = @import("finder.zig");
+const match_mod = @import("match.zig");
+const xtest = @import("xtest.zig");
+
+const Screen = screen_mod.Screen;
+const Image = image_mod.Image;
+const Finder = finder_mod.Finder;
+const Match = match_mod.Match;
+const Mouse = xtest.Mouse;
+
 /// Default wait timeout for find operations (seconds)
 pub const DEFAULT_AUTO_WAIT_TIMEOUT: f64 = 3.0;
 
@@ -280,6 +293,157 @@ pub const Region = struct {
     /// Check equality
     pub fn eql(self: Region, other: Region) bool {
         return self.rect.eql(other.rect);
+    }
+
+    // ========================================================================
+    // Phase 7: Integrated Operations (capture + find + input)
+    // ========================================================================
+
+    /// Capture this region as an Image
+    pub fn captureImage(self: Region, allocator: std.mem.Allocator) !Image {
+        var scr = try Screen.primary(allocator);
+        defer scr.deinit();
+
+        var captured = try scr.captureRegion(self.rect);
+        defer captured.deinit();
+
+        return Image.fromCapture(allocator, captured);
+    }
+
+    /// Find an image pattern within this region
+    /// Returns null if not found
+    pub fn findImage(self: Region, allocator: std.mem.Allocator, template: *const Image) !?Match {
+        // Capture this region
+        var region_image = try self.captureImage(allocator);
+        defer region_image.deinit();
+
+        // Search for template
+        var finder = Finder.init(allocator, &region_image);
+        defer finder.deinit();
+
+        if (finder.find(template)) |match_result| {
+            // Adjust match bounds to screen coordinates
+            return Match.initAt(
+                self.rect.x + match_result.bounds.x,
+                self.rect.y + match_result.bounds.y,
+                match_result.bounds.width,
+                match_result.bounds.height,
+                match_result.score,
+            );
+        }
+
+        return null;
+    }
+
+    /// Check if an image exists in this region
+    pub fn existsImage(self: Region, allocator: std.mem.Allocator, template: *const Image, timeout_sec: f64) !bool {
+        const start = std.time.milliTimestamp();
+        const timeout_ms: i64 = @intFromFloat(timeout_sec * 1000.0);
+
+        while (true) {
+            if (try self.findImage(allocator, template)) |_| {
+                return true;
+            }
+
+            const elapsed = std.time.milliTimestamp() - start;
+            if (elapsed >= timeout_ms) {
+                return false;
+            }
+
+            // Small delay between retries
+            std.Thread.sleep(100 * std.time.ns_per_ms);
+        }
+    }
+
+    /// Wait for an image to appear in this region
+    /// Returns the Match if found, null if timeout
+    pub fn waitImage(self: Region, allocator: std.mem.Allocator, template: *const Image, timeout_sec: f64) !?Match {
+        const start = std.time.milliTimestamp();
+        const timeout_ms: i64 = @intFromFloat(timeout_sec * 1000.0);
+
+        while (true) {
+            if (try self.findImage(allocator, template)) |match_result| {
+                return match_result;
+            }
+
+            const elapsed = std.time.milliTimestamp() - start;
+            if (elapsed >= timeout_ms) {
+                return null;
+            }
+
+            // Small delay between retries
+            std.Thread.sleep(100 * std.time.ns_per_ms);
+        }
+    }
+
+    /// Wait for an image to vanish from this region
+    /// Returns true if vanished, false if still present after timeout
+    pub fn waitVanishImage(self: Region, allocator: std.mem.Allocator, template: *const Image, timeout_sec: f64) !bool {
+        const start = std.time.milliTimestamp();
+        const timeout_ms: i64 = @intFromFloat(timeout_sec * 1000.0);
+
+        while (true) {
+            if (try self.findImage(allocator, template)) |_| {
+                // Still there, check timeout
+                const elapsed = std.time.milliTimestamp() - start;
+                if (elapsed >= timeout_ms) {
+                    return false; // Still present after timeout
+                }
+                std.Thread.sleep(100 * std.time.ns_per_ms);
+            } else {
+                return true; // Vanished
+            }
+        }
+    }
+
+    /// Find and click on an image pattern
+    pub fn clickImage(self: Region, allocator: std.mem.Allocator, template: *const Image) !void {
+        if (try self.findImage(allocator, template)) |match_result| {
+            const target = match_result.center();
+            try Mouse.clickAt(target.x, target.y, .left);
+        } else {
+            return error.PatternNotFound;
+        }
+    }
+
+    /// Find and double-click on an image pattern
+    pub fn doubleClickImage(self: Region, allocator: std.mem.Allocator, template: *const Image) !void {
+        if (try self.findImage(allocator, template)) |match_result| {
+            const target = match_result.center();
+            try Mouse.smoothMoveTo(target.x, target.y);
+            try Mouse.doubleClick(.left);
+        } else {
+            return error.PatternNotFound;
+        }
+    }
+
+    /// Find and right-click on an image pattern
+    pub fn rightClickImage(self: Region, allocator: std.mem.Allocator, template: *const Image) !void {
+        if (try self.findImage(allocator, template)) |match_result| {
+            const target = match_result.center();
+            try Mouse.clickAt(target.x, target.y, .right);
+        } else {
+            return error.PatternNotFound;
+        }
+    }
+
+    /// Click at the center of this region
+    pub fn clickCenter(self: Region) !void {
+        const c = self.center();
+        try Mouse.clickAt(c.x, c.y, .left);
+    }
+
+    /// Double-click at the center of this region
+    pub fn doubleClickCenter(self: Region) !void {
+        const c = self.center();
+        try Mouse.smoothMoveTo(c.x, c.y);
+        try Mouse.doubleClick(.left);
+    }
+
+    /// Right-click at the center of this region
+    pub fn rightClickCenter(self: Region) !void {
+        const c = self.center();
+        try Mouse.clickAt(c.x, c.y, .right);
     }
 
     pub fn format(

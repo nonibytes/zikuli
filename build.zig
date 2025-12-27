@@ -258,4 +258,22 @@ pub fn build(b: *std.Build) void {
     const run_test_keyboard = b.addRunArtifact(test_keyboard);
     const test_keyboard_step = b.step("test-keyboard", "Run XTest keyboard control verification test");
     test_keyboard_step.dependOn(&run_test_keyboard.step);
+
+    // Test region operations executable for verifying integrated find/click/wait (Phase 7)
+    const test_region_ops = b.addExecutable(.{
+        .name = "test_region_ops",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_region_ops.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_region_ops);
+
+    const run_test_region_ops = b.addRunArtifact(test_region_ops);
+    const test_region_ops_step = b.step("test-region-ops", "Run Region operations integration test (Phase 7)");
+    test_region_ops_step.dependOn(&run_test_region_ops.step);
 }
