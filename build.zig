@@ -356,6 +356,24 @@ pub fn build(b: *std.Build) void {
     const test_screenshot_step = b.step("test-screenshot", "Capture and save screenshot for debugging");
     test_screenshot_step.dependOn(&run_test_screenshot.step);
 
+    // SikuliX-Style API test (Phase 11)
+    const test_sikulix_api = b.addExecutable(.{
+        .name = "test_sikulix_api",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_sikulix_api.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_sikulix_api);
+
+    const run_test_sikulix_api = b.addRunArtifact(test_sikulix_api);
+    const test_sikulix_api_step = b.step("test-sikulix-api", "Run SikuliX-style API integration test (Phase 11)");
+    test_sikulix_api_step.dependOn(&run_test_sikulix_api.step);
+
     // ========================================================================
     // Example Executables (Phase 9)
     // ========================================================================
