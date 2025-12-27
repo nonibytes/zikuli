@@ -24,7 +24,9 @@
 
 ## Current Phase
 
-Phase 0: Project Setup (in progress)
+Phase 4: OpenCV Template Matching (completed)
+
+Next: Phase 5: Mouse control via XTest
 
 ## Decisions
 
@@ -55,6 +57,9 @@ None currently.
 - X11 only (no Wayland support initially)
 - OpenCV required for template matching
 - Tesseract required for OCR
+- OpenCV 4.x C API headers require C++11 (created C++ wrapper to solve)
+- Zig 0.15 deprecated `std.io.getStdOut()` - use `std.fs.File.stdout().deprecatedWriter()`
+- Zig 0.15 strict about parameter shadowing - rename parameters if they shadow other names
 
 ## User Preferences
 
