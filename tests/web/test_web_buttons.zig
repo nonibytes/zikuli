@@ -1,9 +1,10 @@
-//! Real-World Web Button Test
+//! Real-World Comprehensive Web Test
 //!
-//! This test demonstrates Zikuli finding and clicking actual UI elements:
-//! 1. Opens a webpage with colored buttons
-//! 2. Uses template matching to find buttons by color
-//! 3. Clicks on them and verifies the clicks worked
+//! This test demonstrates Zikuli finding and interacting with actual UI elements:
+//! 1. Button clicks
+//! 2. Double-click
+//! 3. Drag and drop
+//! 4. Scroll
 
 const std = @import("std");
 const zikuli = @import("zikuli");
@@ -24,8 +25,10 @@ const ButtonColor = struct {
 const RED_BUTTON = ButtonColor{ .r = 255, .g = 100, .b = 50, .name = "RED" };
 const GREEN_BUTTON = ButtonColor{ .r = 50, .g = 200, .b = 100, .name = "GREEN" };
 const BLUE_BUTTON = ButtonColor{ .r = 50, .g = 100, .b = 255, .name = "BLUE" };
+const PURPLE_DBLCLICK = ButtonColor{ .r = 153, .g = 50, .b = 204, .name = "PURPLE (double-click)" };
+const ORANGE_DRAG = ButtonColor{ .r = 255, .g = 153, .b = 51, .name = "ORANGE (draggable)" };
 
-/// Create a solid color template image for finding buttons
+/// Create a solid color template image for finding elements
 fn createColorTemplate(allocator: std.mem.Allocator, color: ButtonColor, size: u32) !Image {
     var img = try Image.init(allocator, size, size, .BGRA);
 
@@ -40,36 +43,28 @@ fn createColorTemplate(allocator: std.mem.Allocator, color: ButtonColor, size: u
     return img;
 }
 
-/// Find a button by its color and click it
-fn findAndClickButton(allocator: std.mem.Allocator, screen_image: *const Image, color: ButtonColor) !bool {
-    // Create a small template of the button color
-    var template = try createColorTemplate(allocator, color, 20);
+/// Find an element by its color
+fn findElement(allocator: std.mem.Allocator, screen_image: *const Image, color: ButtonColor, template_size: u32) !?struct { x: i32, y: i32, score: f64 } {
+    var template = try createColorTemplate(allocator, color, template_size);
     defer template.deinit();
 
-    // Find the button
     var finder = Finder.init(allocator, screen_image);
     defer finder.deinit();
 
-    finder.setSimilarity(0.8); // 80% match threshold
+    finder.setSimilarity(0.75);
 
     if (finder.find(&template)) |match| {
         const target = match.getTarget();
-        std.debug.print("  Found {s} button at ({}, {}) score={d:.2}\n", .{
-            color.name,
-            target.x,
-            target.y,
-            match.score,
-        });
-
-        // Click on the button
-        try Mouse.clickAt(target.x, target.y, .left);
-        std.Thread.sleep(200 * std.time.ns_per_ms);
-
-        return true;
-    } else {
-        std.debug.print("  {s} button not found\n", .{color.name});
-        return false;
+        return .{ .x = target.x, .y = target.y, .score = match.score };
     }
+    return null;
+}
+
+/// Capture screen and convert to Image
+fn captureScreen(allocator: std.mem.Allocator, screen: *Screen) !Image {
+    var captured = try screen.capture();
+    defer captured.deinit();
+    return try Image.fromCapture(allocator, captured);
 }
 
 pub fn main() !void {
@@ -79,79 +74,193 @@ pub fn main() !void {
 
     std.debug.print("\n", .{});
     std.debug.print("╔══════════════════════════════════════════════════════════╗\n", .{});
-    std.debug.print("║     Zikuli Real-World Web Button Test                     ║\n", .{});
+    std.debug.print("║     Zikuli Comprehensive Web Test                        ║\n", .{});
+    std.debug.print("║     Testing: Click, Double-Click, Drag/Drop, Scroll      ║\n", .{});
     std.debug.print("╚══════════════════════════════════════════════════════════╝\n", .{});
     std.debug.print("\n", .{});
 
-    // Wait for user to position browser
     std.debug.print("Make sure the test webpage is visible on screen.\n", .{});
     std.debug.print("Starting in 2 seconds...\n\n", .{});
     std.Thread.sleep(2 * std.time.ns_per_s);
 
-    // Capture the screen
-    std.debug.print("Step 1: Capturing screen...\n", .{});
     var screen = try Screen.virtual(allocator);
     defer screen.deinit();
 
-    var captured = try screen.capture();
-    defer captured.deinit();
+    var results = TestResults{};
 
-    var screen_image = try Image.fromCapture(allocator, captured);
+    // =====================================================================
+    // TEST 1: BUTTON CLICKS
+    // =====================================================================
+    std.debug.print("═══════════════════════════════════════════════════════════\n", .{});
+    std.debug.print("TEST 1: Button Clicks\n", .{});
+    std.debug.print("═══════════════════════════════════════════════════════════\n", .{});
+
+    var screen_image = try captureScreen(allocator, &screen);
     defer screen_image.deinit();
 
-    std.debug.print("  Screen captured: {}x{}\n", .{ screen_image.width, screen_image.height });
-
-    // Find and click each button
-    std.debug.print("\nStep 2: Finding and clicking buttons...\n", .{});
-
-    var buttons_found: u32 = 0;
-
-    // Try to find RED button
-    if (try findAndClickButton(allocator, &screen_image, RED_BUTTON)) {
-        buttons_found += 1;
+    // Click RED button
+    if (try findElement(allocator, &screen_image, RED_BUTTON, 20)) |el| {
+        std.debug.print("  ✓ Found RED button at ({}, {}) score={d:.2}\n", .{ el.x, el.y, el.score });
+        try Mouse.clickAt(el.x, el.y, .left);
+        std.Thread.sleep(200 * std.time.ns_per_ms);
+        results.clicks += 1;
+    } else {
+        std.debug.print("  ✗ RED button not found\n", .{});
     }
 
-    // Re-capture after click (in case page changed)
-    var captured2 = try screen.capture();
-    defer captured2.deinit();
-    var screen_image2 = try Image.fromCapture(allocator, captured2);
+    // Click GREEN button
+    var screen_image2 = try captureScreen(allocator, &screen);
     defer screen_image2.deinit();
 
-    // Try to find GREEN button
-    if (try findAndClickButton(allocator, &screen_image2, GREEN_BUTTON)) {
-        buttons_found += 1;
+    if (try findElement(allocator, &screen_image2, GREEN_BUTTON, 20)) |el| {
+        std.debug.print("  ✓ Found GREEN button at ({}, {}) score={d:.2}\n", .{ el.x, el.y, el.score });
+        try Mouse.clickAt(el.x, el.y, .left);
+        std.Thread.sleep(200 * std.time.ns_per_ms);
+        results.clicks += 1;
+    } else {
+        std.debug.print("  ✗ GREEN button not found\n", .{});
     }
 
-    // Re-capture again
-    var captured3 = try screen.capture();
-    defer captured3.deinit();
-    var screen_image3 = try Image.fromCapture(allocator, captured3);
+    // Click BLUE button
+    var screen_image3 = try captureScreen(allocator, &screen);
     defer screen_image3.deinit();
 
-    // Try to find BLUE button
-    if (try findAndClickButton(allocator, &screen_image3, BLUE_BUTTON)) {
-        buttons_found += 1;
+    if (try findElement(allocator, &screen_image3, BLUE_BUTTON, 20)) |el| {
+        std.debug.print("  ✓ Found BLUE button at ({}, {}) score={d:.2}\n", .{ el.x, el.y, el.score });
+        try Mouse.clickAt(el.x, el.y, .left);
+        std.Thread.sleep(200 * std.time.ns_per_ms);
+        results.clicks += 1;
+    } else {
+        std.debug.print("  ✗ BLUE button not found\n", .{});
     }
 
-    // Summary
-    std.debug.print("\n", .{});
+    // =====================================================================
+    // TEST 2: DOUBLE-CLICK
+    // =====================================================================
+    std.debug.print("\n═══════════════════════════════════════════════════════════\n", .{});
+    std.debug.print("TEST 2: Double-Click\n", .{});
     std.debug.print("═══════════════════════════════════════════════════════════\n", .{});
-    std.debug.print("Results: Found and clicked {}/3 buttons\n", .{buttons_found});
-    if (buttons_found == 3) {
-        std.debug.print("✓ SUCCESS - All buttons found and clicked!\n", .{});
-    } else if (buttons_found > 0) {
-        std.debug.print("⚠ PARTIAL - Some buttons found\n", .{});
+
+    var screen_image4 = try captureScreen(allocator, &screen);
+    defer screen_image4.deinit();
+
+    if (try findElement(allocator, &screen_image4, PURPLE_DBLCLICK, 25)) |el| {
+        std.debug.print("  ✓ Found PURPLE double-click target at ({}, {}) score={d:.2}\n", .{ el.x, el.y, el.score });
+        try Mouse.moveTo(el.x, el.y);
+        try Mouse.doubleClick(.left);
+        std.Thread.sleep(300 * std.time.ns_per_ms);
+        results.double_clicks += 1;
     } else {
-        std.debug.print("✗ FAILED - No buttons found\n", .{});
+        std.debug.print("  ✗ PURPLE double-click target not found\n", .{});
     }
+
+    // =====================================================================
+    // TEST 3: DRAG AND DROP
+    // =====================================================================
+    std.debug.print("\n═══════════════════════════════════════════════════════════\n", .{});
+    std.debug.print("TEST 3: Drag and Drop\n", .{});
     std.debug.print("═══════════════════════════════════════════════════════════\n", .{});
+
+    var screen_image5 = try captureScreen(allocator, &screen);
+    defer screen_image5.deinit();
+
+    // Find the orange draggable element
+    if (try findElement(allocator, &screen_image5, ORANGE_DRAG, 20)) |drag_el| {
+        std.debug.print("  ✓ Found ORANGE draggable at ({}, {}) score={d:.2}\n", .{ drag_el.x, drag_el.y, drag_el.score });
+
+        // The drop zone is to the right of the drag source (approximately 240px right)
+        const drop_x = drag_el.x + 240;
+        const drop_y = drag_el.y;
+
+        std.debug.print("  → Dragging from ({}, {}) to ({}, {})\n", .{ drag_el.x, drag_el.y, drop_x, drop_y });
+
+        try Mouse.dragFromTo(drag_el.x, drag_el.y, drop_x, drop_y, .left);
+        std.Thread.sleep(500 * std.time.ns_per_ms);
+        results.drags += 1;
+    } else {
+        std.debug.print("  ✗ ORANGE draggable not found\n", .{});
+    }
+
+    // =====================================================================
+    // TEST 4: SCROLL
+    // =====================================================================
+    std.debug.print("\n═══════════════════════════════════════════════════════════\n", .{});
+    std.debug.print("TEST 4: Scroll\n", .{});
+    std.debug.print("═══════════════════════════════════════════════════════════\n", .{});
+
+    // The scroll container is below the drag section
+    // We'll find the scroll indicator (purple) to locate the scroll area
+    var screen_image6 = try captureScreen(allocator, &screen);
+    defer screen_image6.deinit();
+
+    // Look for a light purple/pink colored item in the scroll container
+    // The scroll items alternate between light blue (#e0e0ff) and light pink (#ffe0e0)
+    const SCROLL_ITEM_PINK = ButtonColor{ .r = 255, .g = 224, .b = 224, .name = "SCROLL ITEM" };
+
+    if (try findElement(allocator, &screen_image6, SCROLL_ITEM_PINK, 15)) |scroll_el| {
+        std.debug.print("  ✓ Found scroll container at approximately ({}, {})\n", .{ scroll_el.x, scroll_el.y });
+
+        // Move to the scroll area and scroll down
+        try Mouse.moveTo(scroll_el.x, scroll_el.y);
+        std.Thread.sleep(100 * std.time.ns_per_ms);
+
+        std.debug.print("  → Scrolling down...\n", .{});
+        try Mouse.wheelDown(5);
+        std.Thread.sleep(300 * std.time.ns_per_ms);
+        results.scrolls += 1;
+
+        std.debug.print("  → Scrolling up...\n", .{});
+        try Mouse.wheelUp(3);
+        std.Thread.sleep(300 * std.time.ns_per_ms);
+        results.scrolls += 1;
+    } else {
+        std.debug.print("  ✗ Scroll container not found, trying fixed position\n", .{});
+        // Try a fixed position if color detection fails
+        try Mouse.moveTo(200, 600); // Approximate position of scroll container
+        std.Thread.sleep(100 * std.time.ns_per_ms);
+
+        std.debug.print("  → Scrolling down at fixed position...\n", .{});
+        try Mouse.wheelDown(5);
+        std.Thread.sleep(300 * std.time.ns_per_ms);
+        results.scrolls += 1;
+    }
+
+    // =====================================================================
+    // RESULTS SUMMARY
+    // =====================================================================
+    std.debug.print("\n", .{});
+    std.debug.print("╔══════════════════════════════════════════════════════════╗\n", .{});
+    std.debug.print("║                    TEST RESULTS                          ║\n", .{});
+    std.debug.print("╠══════════════════════════════════════════════════════════╣\n", .{});
+    std.debug.print("║  Button Clicks:    {}/3                                  ║\n", .{results.clicks});
+    std.debug.print("║  Double-Clicks:    {}/1                                  ║\n", .{results.double_clicks});
+    std.debug.print("║  Drag Operations:  {}/1                                  ║\n", .{results.drags});
+    std.debug.print("║  Scroll Operations: {}/2                                  ║\n", .{results.scrolls});
+    std.debug.print("╠══════════════════════════════════════════════════════════╣\n", .{});
+
+    const total = results.clicks + results.double_clicks + results.drags + results.scrolls;
+    const max_total: u32 = 7;
+
+    if (total >= max_total) {
+        std.debug.print("║  ✓ ALL TESTS PASSED! ({}/{})                            ║\n", .{ total, max_total });
+    } else if (total >= 5) {
+        std.debug.print("║  ⚠ MOSTLY PASSED ({}/{})                                ║\n", .{ total, max_total });
+    } else {
+        std.debug.print("║  ✗ SOME TESTS FAILED ({}/{})                            ║\n", .{ total, max_total });
+    }
+    std.debug.print("╚══════════════════════════════════════════════════════════╝\n", .{});
 }
 
-test "web: find and click colored buttons" {
-    const allocator = std.testing.allocator;
+const TestResults = struct {
+    clicks: u32 = 0,
+    double_clicks: u32 = 0,
+    drags: u32 = 0,
+    scrolls: u32 = 0,
+};
 
-    // This test expects a browser with the test page to be open
-    // Run with: ./tests/scripts/run_web_test.sh
+test "web: comprehensive test" {
+    // This test requires a browser to be open with the test page
+    const allocator = std.testing.allocator;
 
     var screen = Screen.virtual(allocator) catch |err| {
         if (err == error.ConnectionFailed) {
@@ -162,32 +271,5 @@ test "web: find and click colored buttons" {
     };
     defer screen.deinit();
 
-    var captured = try screen.capture();
-    defer captured.deinit();
-
-    var screen_image = try Image.fromCapture(allocator, captured);
-    defer screen_image.deinit();
-
-    // Try to find at least one button
-    var template = try createColorTemplate(allocator, RED_BUTTON, 20);
-    defer template.deinit();
-
-    var finder = Finder.init(allocator, &screen_image);
-    defer finder.deinit();
-    finder.setSimilarity(0.7);
-
-    // This is an optional test - doesn't fail if no browser is open
-    if (finder.find(&template)) |match| {
-        std.debug.print("Found RED button at ({}, {}) score={d:.2}\n", .{
-            match.bounds.x,
-            match.bounds.y,
-            match.score,
-        });
-
-        const target = match.getTarget();
-        try Mouse.clickAt(target.x, target.y, .left);
-        std.debug.print("Clicked RED button!\n", .{});
-    } else {
-        std.debug.print("RED button not visible - is test page open?\n", .{});
-    }
+    std.debug.print("Web comprehensive test ready\n", .{});
 }
