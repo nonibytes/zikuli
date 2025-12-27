@@ -24,10 +24,12 @@ const std = @import("std");
 const zikuli = @import("zikuli");
 const content_server = @import("content_server.zig");
 const verification = @import("verification.zig");
+const event_tracker = @import("event_tracker.zig");
 
 pub const ContentServer = content_server.ContentServer;
 pub const Window = content_server.Window;
 pub const Verifier = verification.Verifier;
+pub const EventTracker = event_tracker.EventTracker;
 
 /// RGB color type
 pub const RGB = struct {
@@ -47,6 +49,7 @@ pub const TestHarness = struct {
     allocator: std.mem.Allocator,
     content: ContentServer,
     verifier: Verifier,
+    tracker: EventTracker,
     placed_windows: std.ArrayList(PlacedWindow),
 
     pub const PlacedWindow = struct {
@@ -55,6 +58,7 @@ pub const TestHarness = struct {
         expected_x: i16,
         expected_y: i16,
         expected_color: ?RGB,
+        tracked: bool,
     };
 
     pub fn init(allocator: std.mem.Allocator) !TestHarness {
@@ -64,10 +68,13 @@ pub const TestHarness = struct {
         var verifier = try Verifier.init(allocator);
         errdefer verifier.deinit();
 
+        const tracker = EventTracker.init(allocator, content.conn);
+
         return TestHarness{
             .allocator = allocator,
             .content = content,
             .verifier = verifier,
+            .tracker = tracker,
             .placed_windows = .empty,
         };
     }
@@ -79,6 +86,7 @@ pub const TestHarness = struct {
         }
         self.placed_windows.deinit(self.allocator);
 
+        self.tracker.deinit();
         self.content.deinit();
         self.verifier.deinit();
     }
@@ -108,9 +116,85 @@ pub const TestHarness = struct {
             .expected_x = x,
             .expected_y = y,
             .expected_color = color,
+            .tracked = false,
         });
 
         return win;
+    }
+
+    /// Place a click target - a window that tracks button events
+    /// Use this to verify clicks actually happen
+    pub fn placeClickTarget(
+        self: *TestHarness,
+        x: i16,
+        y: i16,
+        size: u16,
+        color: RGB,
+    ) !*Window {
+        var win = try self.content.createWindow(x, y, size, size);
+        win.fillColor(color.r, color.g, color.b);
+        win.map();
+        self.content.sync();
+
+        // Enable event tracking on this window
+        try self.tracker.trackWindow(win.id);
+
+        const desc = try std.fmt.allocPrint(
+            self.allocator,
+            "Click target ({}, {}, {}) at ({}, {})",
+            .{ color.r, color.g, color.b, x, y },
+        );
+
+        try self.placed_windows.append(self.allocator, .{
+            .window = win,
+            .description = desc,
+            .expected_x = x,
+            .expected_y = y,
+            .expected_color = color,
+            .tracked = true,
+        });
+
+        return win;
+    }
+
+    /// Poll and record any pending X11 events
+    pub fn pollEvents(self: *TestHarness) !void {
+        try self.tracker.pollEvents();
+    }
+
+    /// Clear recorded events (call before each click test)
+    pub fn clearEvents(self: *TestHarness) void {
+        self.tracker.clearEvents();
+    }
+
+    /// Verify a click occurred on a tracked window
+    pub fn expectClick(self: *TestHarness, button: u8) !void {
+        try self.tracker.expectClick(button);
+    }
+
+    /// Verify a double-click occurred
+    pub fn expectDoubleClick(self: *TestHarness, button: u8) !void {
+        try self.tracker.expectDoubleClick(button);
+    }
+
+    /// Verify a drag occurred (press, motion, release)
+    pub fn expectDrag(self: *TestHarness, button: u8) !void {
+        try self.tracker.expectDrag(button);
+    }
+
+    /// Verify scroll up occurred
+    pub fn expectScrollUp(self: *TestHarness, min_count: usize) !void {
+        try self.tracker.expectScrollUp(min_count);
+    }
+
+    /// Verify scroll down occurred
+    pub fn expectScrollDown(self: *TestHarness, min_count: usize) !void {
+        try self.tracker.expectScrollDown(min_count);
+    }
+
+    /// Print recorded events for debugging
+    pub fn printEvents(self: *TestHarness) void {
+        self.tracker.printEvents();
     }
 
     /// Place multiple test patterns for comprehensive testing
@@ -192,15 +276,26 @@ pub const TestHarness = struct {
 };
 
 /// Convenience function to run a test in the virtual environment
+///
+/// IMPORTANT: Tests will FAIL if no X11 display is available.
+/// This prevents false confidence from silently skipped tests.
+/// Run with: ./tests/scripts/run_virtual_tests.sh test-virtual
 pub fn runVirtualTest(
     allocator: std.mem.Allocator,
     comptime testFn: fn (*TestHarness) anyerror!void,
 ) !void {
     var harness = TestHarness.init(allocator) catch |err| {
         if (err == error.ConnectionFailed) {
-            std.debug.print("Skipping test: No X11 display available\n", .{});
-            std.debug.print("Run with: DISPLAY=:99 or use tests/scripts/run_virtual_tests.sh\n", .{});
-            return;
+            // FAIL loudly instead of silently skipping
+            std.debug.print("\n", .{});
+            std.debug.print("╔══════════════════════════════════════════════════════════════╗\n", .{});
+            std.debug.print("║  TEST FAILURE: No X11 display available                      ║\n", .{});
+            std.debug.print("║                                                              ║\n", .{});
+            std.debug.print("║  Virtual tests require a running X11 server.                 ║\n", .{});
+            std.debug.print("║  Run with: ./tests/scripts/run_virtual_tests.sh test-virtual ║\n", .{});
+            std.debug.print("╚══════════════════════════════════════════════════════════════╝\n", .{});
+            std.debug.print("\n", .{});
+            return error.NoX11DisplayAvailable;
         }
         return err;
     };

@@ -14,7 +14,8 @@
 const std = @import("std");
 
 // XCB C bindings for direct X11 access
-const x11 = @cImport({
+// Made public so event_tracker.zig can use the same types
+pub const x11 = @cImport({
     @cInclude("xcb/xcb.h");
     @cInclude("xcb/shm.h");
     @cInclude("xcb/xcb_image.h");
