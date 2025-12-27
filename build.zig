@@ -298,4 +298,80 @@ pub fn build(b: *std.Build) void {
     const run_test_ocr = b.addRunArtifact(test_ocr);
     const test_ocr_step = b.step("test-ocr", "Run Tesseract OCR integration test (Phase 8)");
     test_ocr_step.dependOn(&run_test_ocr.step);
+
+    // ========================================================================
+    // Example Executables (Phase 9)
+    // ========================================================================
+
+    // Basic automation example
+    const example_basic = b.addExecutable(.{
+        .name = "example_basic",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/basic_automation.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(example_basic);
+
+    const run_example_basic = b.addRunArtifact(example_basic);
+    const example_basic_step = b.step("run-example-basic", "Run basic automation example");
+    example_basic_step.dependOn(&run_example_basic.step);
+
+    // Find and click example
+    const example_find = b.addExecutable(.{
+        .name = "example_find",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/find_and_click.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(example_find);
+
+    const run_example_find = b.addRunArtifact(example_find);
+    const example_find_step = b.step("run-example-find", "Run find and click example");
+    example_find_step.dependOn(&run_example_find.step);
+
+    // Type text example
+    const example_type = b.addExecutable(.{
+        .name = "example_type",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/type_text.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(example_type);
+
+    const run_example_type = b.addRunArtifact(example_type);
+    const example_type_step = b.step("run-example-type", "Run type text example");
+    example_type_step.dependOn(&run_example_type.step);
+
+    // OCR example
+    const example_ocr = b.addExecutable(.{
+        .name = "example_ocr",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/ocr_text.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(example_ocr);
+
+    const run_example_ocr = b.addRunArtifact(example_ocr);
+    const example_ocr_step = b.step("run-example-ocr", "Run OCR text recognition example");
+    example_ocr_step.dependOn(&run_example_ocr.step);
 }
