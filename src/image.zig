@@ -97,21 +97,32 @@ pub const Image = struct {
     }
 
     /// Create image from captured screen image (copies data)
+    /// Note: X11 captures often have alpha=0, so we fix it to 255 (opaque)
     pub fn fromCapture(allocator: std.mem.Allocator, captured: CapturedImage) !Image {
         const data = try allocator.alloc(u8, captured.pixels.len);
         @memcpy(data, captured.pixels);
+
+        const format: PixelFormat = switch (captured.format) {
+            .BGRA => .BGRA,
+            .RGBA => .RGBA,
+            .RGB => .RGB,
+            .BGR => .BGR,
+        };
+
+        // Fix alpha channel for RGBA/BGRA formats (X11 sets alpha=0)
+        if (format == .RGBA or format == .BGRA) {
+            var i: usize = 3; // Start at first alpha byte
+            while (i < data.len) : (i += 4) {
+                data[i] = 255; // Set alpha to opaque
+            }
+        }
 
         return Image{
             .data = data,
             .width = captured.width,
             .height = captured.height,
             .stride = captured.stride,
-            .format = switch (captured.format) {
-                .BGRA => .BGRA,
-                .RGBA => .RGBA,
-                .RGB => .RGB,
-                .BGR => .BGR,
-            },
+            .format = format,
             .allocator = allocator,
             .path = null,
             .last_seen = null,
