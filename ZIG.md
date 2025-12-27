@@ -228,9 +228,49 @@ fn max(comptime T: type, a: T, b: T) T {
 }
 ```
 
+## ArrayList (Unmanaged in 0.15)
+
+```zig
+// Zig 0.15 ArrayList is unmanaged - allocator passed to methods, not init
+var list = std.ArrayList(u32).empty;  // NOT .init(allocator)
+
+// Append requires allocator
+try list.append(allocator, value);
+
+// Deinit requires allocator
+defer list.deinit(allocator);
+
+// toOwnedSlice requires allocator
+const slice = try list.toOwnedSlice(allocator);
+
+// errdefer also needs allocator
+errdefer list.deinit(allocator);
+```
+
+## Thread.sleep
+
+```zig
+// Use nanoseconds
+std.Thread.sleep(100 * std.time.ns_per_ms);  // 100ms
+std.Thread.sleep(2 * std.time.ns_per_s);      // 2 seconds
+```
+
+## Process.Child
+
+```zig
+// Spawn external process
+var child = std.process.Child.init(&.{ "gedit" }, std.heap.page_allocator);
+child.stdin_behavior = .Ignore;
+child.stdout_behavior = .Ignore;
+child.stderr_behavior = .Ignore;
+_ = try child.spawn();
+```
+
 ## Zig 0.15 Breaking Changes from 0.13
 
 1. `std.io.getStdOut()` → `std.fs.File.stdout()`
 2. Writer/Reader now require buffer parameter (use `deprecatedWriter()` for old behavior)
 3. Build API changes in `std.Build`
 4. Package format changes in `build.zig.zon` (.name uses .identifier syntax)
+5. `std.ArrayList(T).init(allocator)` → `.empty` + pass allocator to methods
+6. Parameter shadowing is stricter - rename params that shadow other names
