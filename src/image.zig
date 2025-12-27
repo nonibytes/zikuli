@@ -15,8 +15,9 @@ const Rectangle = geometry.Rectangle;
 const Point = geometry.Point;
 const CapturedImage = x11.CapturedImage;
 
-// libpng C bindings
+// libpng and stdio C bindings
 const c = @cImport({
+    @cInclude("stdio.h");
     @cInclude("png.h");
 });
 
@@ -364,23 +365,185 @@ pub const ImageError = error{
 };
 
 // ============================================================================
-// PNG I/O (placeholder - will be implemented with libpng)
+// PNG I/O using libpng
 // ============================================================================
 
 /// Load image from PNG file
 pub fn loadPng(allocator: std.mem.Allocator, path: []const u8) !Image {
-    _ = allocator;
-    _ = path;
-    // TODO: Implement with libpng
-    return error.FileNotFound;
+    // Create null-terminated path
+    const path_z = try allocator.dupeZ(u8, path);
+    defer allocator.free(path_z);
+
+    // Open file
+    const file = c.fopen(path_z.ptr, "rb");
+    if (file == null) {
+        return error.FileNotFound;
+    }
+    defer _ = c.fclose(file);
+
+    // Check PNG signature
+    var sig: [8]u8 = undefined;
+    if (c.fread(&sig, 1, 8, file) != 8) {
+        return error.ReadError;
+    }
+    if (c.png_sig_cmp(&sig, 0, 8) != 0) {
+        return error.InvalidFormat;
+    }
+
+    // Create read struct
+    var png = c.png_create_read_struct(c.PNG_LIBPNG_VER_STRING, null, null, null);
+    if (png == null) {
+        return error.OutOfMemory;
+    }
+    defer c.png_destroy_read_struct(@ptrCast(&png), null, null);
+
+    // Create info struct
+    const info = c.png_create_info_struct(png);
+    if (info == null) {
+        return error.OutOfMemory;
+    }
+
+    // Initialize IO
+    c.png_init_io(png, file);
+    c.png_set_sig_bytes(png, 8);
+
+    // Read info
+    c.png_read_info(png, info);
+
+    const width = c.png_get_image_width(png, info);
+    const height = c.png_get_image_height(png, info);
+    const color_type = c.png_get_color_type(png, info);
+    const bit_depth = c.png_get_bit_depth(png, info);
+
+    // Normalize to 8-bit RGBA
+    if (bit_depth == 16) {
+        c.png_set_strip_16(png);
+    }
+    if (color_type == c.PNG_COLOR_TYPE_PALETTE) {
+        c.png_set_palette_to_rgb(png);
+    }
+    if (color_type == c.PNG_COLOR_TYPE_GRAY and bit_depth < 8) {
+        c.png_set_expand_gray_1_2_4_to_8(png);
+    }
+    if (c.png_get_valid(png, info, c.PNG_INFO_tRNS) != 0) {
+        c.png_set_tRNS_to_alpha(png);
+    }
+    if (color_type == c.PNG_COLOR_TYPE_RGB or
+        color_type == c.PNG_COLOR_TYPE_GRAY or
+        color_type == c.PNG_COLOR_TYPE_PALETTE)
+    {
+        c.png_set_filler(png, 0xFF, c.PNG_FILLER_AFTER);
+    }
+    if (color_type == c.PNG_COLOR_TYPE_GRAY or
+        color_type == c.PNG_COLOR_TYPE_GRAY_ALPHA)
+    {
+        c.png_set_gray_to_rgb(png);
+    }
+
+    c.png_read_update_info(png, info);
+
+    // Allocate memory
+    const row_bytes = c.png_get_rowbytes(png, info);
+    const data_size = row_bytes * height;
+    const data = try allocator.alloc(u8, data_size);
+    errdefer allocator.free(data);
+
+    // Create row pointers
+    const row_ptrs = try allocator.alloc([*c]u8, height);
+    defer allocator.free(row_ptrs);
+
+    for (0..height) |i| {
+        row_ptrs[i] = data.ptr + i * row_bytes;
+    }
+
+    // Read image data
+    c.png_read_image(png, @ptrCast(row_ptrs.ptr));
+    c.png_read_end(png, null);
+
+    return Image{
+        .data = data,
+        .width = @intCast(width),
+        .height = @intCast(height),
+        .stride = @intCast(row_bytes),
+        .format = .RGBA,
+        .allocator = allocator,
+        .path = try allocator.dupe(u8, path),
+        .last_seen = null,
+    };
 }
 
 /// Save image to PNG file
 pub fn savePng(image: *const Image, path: []const u8) !void {
-    _ = image;
-    _ = path;
-    // TODO: Implement with libpng
-    return error.WriteError;
+    // Create null-terminated path
+    var path_buf: [4096]u8 = undefined;
+    if (path.len >= path_buf.len) {
+        return error.WriteError;
+    }
+    @memcpy(path_buf[0..path.len], path);
+    path_buf[path.len] = 0;
+
+    // Open file
+    const file = c.fopen(&path_buf, "wb");
+    if (file == null) {
+        return error.WriteError;
+    }
+    defer _ = c.fclose(file);
+
+    // Create write struct
+    var png = c.png_create_write_struct(c.PNG_LIBPNG_VER_STRING, null, null, null);
+    if (png == null) {
+        return error.OutOfMemory;
+    }
+    defer c.png_destroy_write_struct(@ptrCast(&png), null);
+
+    // Create info struct
+    const info = c.png_create_info_struct(png);
+    if (info == null) {
+        return error.OutOfMemory;
+    }
+
+    // Initialize IO
+    c.png_init_io(png, file);
+
+    // Determine color type based on format
+    const color_type: c_int = switch (image.format) {
+        .Grayscale => c.PNG_COLOR_TYPE_GRAY,
+        .RGB, .BGR => c.PNG_COLOR_TYPE_RGB,
+        .RGBA, .BGRA => c.PNG_COLOR_TYPE_RGBA,
+    };
+
+    // Set image info
+    c.png_set_IHDR(
+        png,
+        info,
+        @intCast(image.width),
+        @intCast(image.height),
+        8, // bit depth
+        color_type,
+        c.PNG_INTERLACE_NONE,
+        c.PNG_COMPRESSION_TYPE_DEFAULT,
+        c.PNG_FILTER_TYPE_DEFAULT,
+    );
+
+    // For BGR/BGRA, tell libpng to swap R and B
+    if (image.format == .BGR or image.format == .BGRA) {
+        c.png_set_bgr(png);
+    }
+
+    c.png_write_info(png, info);
+
+    // Write image data row by row
+    const bpp = image.bytesPerPixel();
+    var y: u32 = 0;
+    while (y < image.height) : (y += 1) {
+        const row_start = y * image.stride;
+        const row_end = row_start + image.width * bpp;
+        if (row_end <= image.data.len) {
+            c.png_write_row(png, image.data.ptr + row_start);
+        }
+    }
+
+    c.png_write_end(png, null);
 }
 
 // ============================================================================
