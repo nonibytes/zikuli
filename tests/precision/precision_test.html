@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Zikuli Precision Click Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #1a1a2e;
+        }
+        .test-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Target button - precisely positioned, solid color, no text for clean detection */
+        .target-button {
+            position: absolute;
+            /* Precisely positioned at known coordinates */
+            left: 400px;
+            top: 300px;
+            width: 200px;
+            height: 80px;
+            background: #e94560;
+            border: none;
+            border-radius: 0; /* Sharp corners for precise detection */
+            cursor: pointer;
+            /* No text - pure solid color for accurate template matching */
+        }
+
+        /* Second target at different position - also solid color */
+        .target-button-2 {
+            position: absolute;
+            left: 800px;
+            top: 500px;
+            width: 150px;
+            height: 100px;
+            background: #0f3460;
+            border: none; /* No border for clean matching */
+            border-radius: 0;
+            cursor: pointer;
+            /* No text - pure solid color for accurate template matching */
+        }
+
+        /* Click indicator */
+        .click-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #ffff00;
+            border: 3px solid #ff0000;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+
+        .click-marker.show {
+            display: block;
+            animation: pulse 0.5s ease-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+        }
+
+        /* Info panel */
+        .info-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        .info-panel h3 {
+            margin-bottom: 10px;
+            color: #16c79a;
+        }
+
+        .info-panel .coord {
+            color: #e94560;
+        }
+
+        .result {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .result.success {
+            background: #16c79a;
+            color: black;
+        }
+
+        .result.fail {
+            background: #e94560;
+            color: white;
+        }
+
+        /* Expected center markers (visible for debugging) */
+        .center-marker {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #ffff00;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <!-- Target 1: Red button at (400, 300) size 200x80 -->
+        <!-- Expected center: (500, 340) - in viewport coordinates -->
+        <button class="target-button" id="target1" data-expected-x="500" data-expected-y="340">
+        </button>
+        <div class="center-marker" style="left: 500px; top: 340px;" title="Expected center of Target 1"></div>
+
+        <!-- Target 2: Blue button at (800, 500) size 150x100 -->
+        <!-- Expected center: (875, 550) - in viewport coordinates -->
+        <button class="target-button-2" id="target2" data-expected-x="875" data-expected-y="550">
+        </button>
+        <div class="center-marker" style="left: 875px; top: 550px;" title="Expected center of Target 2"></div>
+
+        <!-- Click marker -->
+        <div class="click-marker" id="clickMarker"></div>
+
+        <!-- Info panel -->
+        <div class="info-panel">
+            <h3>Precision Click Test</h3>
+            <div>Target 1: <span class="coord">(400,300) 200x80</span> → center <span class="coord">(500,340)</span></div>
+            <div>Target 2: <span class="coord">(800,500) 150x100</span> → center <span class="coord">(875,550)</span></div>
+            <div style="margin-top: 10px;">
+                Last click: <span id="lastClick" class="coord">none</span>
+            </div>
+            <div id="resultContainer"></div>
+            <div style="margin-top: 10px; font-size: 12px; color: #888;">
+                Click count: <span id="clickCount">0</span> |
+                Accuracy threshold: ±5px
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Track click statistics
+        let clickCount = 0;
+        let results = [];
+
+        // Configuration
+        const ACCURACY_THRESHOLD = 5; // pixels
+
+        // Listen for clicks anywhere on the page
+        document.addEventListener('click', function(e) {
+            const clickX = e.clientX;
+            const clickY = e.clientY;
+
+            clickCount++;
+            document.getElementById('clickCount').textContent = clickCount;
+            document.getElementById('lastClick').textContent = `(${clickX}, ${clickY})`;
+
+            // Show click marker
+            const marker = document.getElementById('clickMarker');
+            marker.style.left = clickX + 'px';
+            marker.style.top = clickY + 'px';
+            marker.classList.remove('show');
+            void marker.offsetWidth; // Trigger reflow
+            marker.classList.add('show');
+
+            // Check if click was on a target
+            const target = e.target.closest('.target-button, .target-button-2');
+            if (target) {
+                // Use actual element position (getBoundingClientRect) for accuracy
+                const rect = target.getBoundingClientRect();
+                const expectedX = Math.round(rect.left + rect.width / 2);
+                const expectedY = Math.round(rect.top + rect.height / 2);
+                const deltaX = Math.abs(clickX - expectedX);
+                const deltaY = Math.abs(clickY - expectedY);
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                const success = distance <= ACCURACY_THRESHOLD;
+
+                const result = {
+                    target: target.id,
+                    clickX: clickX,
+                    clickY: clickY,
+                    expectedX: expectedX,
+                    expectedY: expectedY,
+                    deltaX: deltaX,
+                    deltaY: deltaY,
+                    distance: distance.toFixed(2),
+                    success: success
+                };
+
+                results.push(result);
+
+                // Log to console for server verification
+                console.log('PRECISION_CLICK:', JSON.stringify(result));
+
+                // POST to server
+                fetch('/click', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(result)
+                }).catch(() => {});
+
+                // Show result
+                const container = document.getElementById('resultContainer');
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'result ' + (success ? 'success' : 'fail');
+                resultDiv.innerHTML = success
+                    ? `✓ ${target.id}: Δ=${distance.toFixed(1)}px (within threshold)`
+                    : `✗ ${target.id}: Δ=${distance.toFixed(1)}px (off by ${deltaX}x${deltaY})`;
+                container.innerHTML = '';
+                container.appendChild(resultDiv);
+            }
+        });
+
+        // Report actual target positions on load (using getBoundingClientRect)
+        window.addEventListener('load', function() {
+            const target1 = document.getElementById('target1');
+            const target2 = document.getElementById('target2');
+            const rect1 = target1.getBoundingClientRect();
+            const rect2 = target2.getBoundingClientRect();
+
+            const targets = [
+                {
+                    id: 'target1',
+                    x: Math.round(rect1.left),
+                    y: Math.round(rect1.top),
+                    w: Math.round(rect1.width),
+                    h: Math.round(rect1.height),
+                    centerX: Math.round(rect1.left + rect1.width/2),
+                    centerY: Math.round(rect1.top + rect1.height/2),
+                    color: '#e94560'
+                },
+                {
+                    id: 'target2',
+                    x: Math.round(rect2.left),
+                    y: Math.round(rect2.top),
+                    w: Math.round(rect2.width),
+                    h: Math.round(rect2.height),
+                    centerX: Math.round(rect2.left + rect2.width/2),
+                    centerY: Math.round(rect2.top + rect2.height/2),
+                    color: '#0f3460'
+                }
+            ];
+            console.log('TARGETS:', JSON.stringify(targets));
+
+            // Update info panel with actual positions
+            document.querySelector('.info-panel').innerHTML = `
+                <h3>Precision Click Test</h3>
+                <div>Target 1: <span class="coord">(${targets[0].x},${targets[0].y}) ${targets[0].w}x${targets[0].h}</span> → center <span class="coord">(${targets[0].centerX},${targets[0].centerY})</span></div>
+                <div>Target 2: <span class="coord">(${targets[1].x},${targets[1].y}) ${targets[1].w}x${targets[1].h}</span> → center <span class="coord">(${targets[1].centerX},${targets[1].centerY})</span></div>
+                <div style="margin-top: 10px;">
+                    Last click: <span id="lastClick" class="coord">none</span>
+                </div>
+                <div id="resultContainer"></div>
+                <div style="margin-top: 10px; font-size: 12px; color: #888;">
+                    Click count: <span id="clickCount">0</span> |
+                    Accuracy threshold: ±5px
+                </div>
+            `;
+
+            fetch('/targets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(targets)
+            }).catch(() => {});
+        });
+    </script>
+</body>
+</html>

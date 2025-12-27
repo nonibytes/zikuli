@@ -108,10 +108,12 @@ pub const XTestConnection = struct {
     }
 
     /// Move mouse to absolute position
+    /// Uses screen_number -1 for multi-monitor setups (Xinerama/RandR)
+    /// This tells XTest to use virtual screen coordinates
     pub fn moveMouse(self: XTestConnection, x: i32, y: i32) !void {
         const result = c.XTestFakeMotionEvent(
             self.display,
-            self.screen,
+            -1, // -1 = current screen (works with multi-monitor Xinerama/RandR)
             x,
             y,
             0, // delay in ms (0 = immediate)

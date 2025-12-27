@@ -420,6 +420,24 @@ pub fn build(b: *std.Build) void {
     const web_test_step = b.step("web-test", "Run real-world web button test (requires browser)");
     web_test_step.dependOn(&run_web_test.step);
 
+    // Precision click test - verifies clicks land at exact center of targets
+    const precision_test = b.addExecutable(.{
+        .name = "precision-test",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/precision/test_precision_click.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(precision_test);
+
+    const run_precision_test = b.addRunArtifact(precision_test);
+    const precision_test_step = b.step("test-precision", "Run precision click test (requires browser with precision_test.html)");
+    precision_test_step.dependOn(&run_precision_test.step);
+
     // SikuliX-Style API test (Phase 11)
     const test_sikulix_api = b.addExecutable(.{
         .name = "test_sikulix_api",
