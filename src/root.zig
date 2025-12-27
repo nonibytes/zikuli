@@ -48,9 +48,11 @@ pub const region = @import("region.zig");
 
 pub const x11 = @import("platform/x11.zig");
 pub const screen = @import("screen.zig");
+pub const image = @import("image.zig");
 
-// Re-export Screen
+// Re-export Screen and Image
 pub const Screen = screen.Screen;
+pub const Image = image.Image;
 
 // Convenience re-exports - Core Types
 pub const Point = geometry.Point;
@@ -147,4 +149,5 @@ test {
     _ = region;
     _ = x11;
     _ = screen;
+    _ = image;
 }
