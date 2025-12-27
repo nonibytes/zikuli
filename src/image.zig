@@ -534,12 +534,51 @@ pub fn savePng(image: *const Image, path: []const u8) !void {
 
     // Write image data row by row
     const bpp = image.bytesPerPixel();
-    var y: u32 = 0;
-    while (y < image.height) : (y += 1) {
-        const row_start = y * image.stride;
-        const row_end = row_start + image.width * bpp;
-        if (row_end <= image.data.len) {
-            c.png_write_row(png, image.data.ptr + row_start);
+
+    // For RGBA/BGRA, X11 often has alpha=0 which makes images transparent
+    // We need to fix alpha to 255 (opaque) before writing
+    if (image.format == .RGBA or image.format == .BGRA) {
+        // Allocate a row buffer to fix alpha (max 4K width * 4 bytes = 16KB)
+        var row_buf: [16384]u8 = undefined;
+        const row_len = image.width * bpp;
+
+        if (row_len <= row_buf.len) {
+            var y: u32 = 0;
+            while (y < image.height) : (y += 1) {
+                const row_start = y * image.stride;
+                if (row_start + row_len <= image.data.len) {
+                    // Copy row and fix alpha channel
+                    @memcpy(row_buf[0..row_len], image.data[row_start..][0..row_len]);
+
+                    // Set alpha to 255 for each pixel
+                    var x: u32 = 0;
+                    while (x < image.width) : (x += 1) {
+                        row_buf[x * 4 + 3] = 255;
+                    }
+
+                    c.png_write_row(png, &row_buf);
+                }
+            }
+        } else {
+            // Row too large for stack buffer, write without alpha fix
+            var y: u32 = 0;
+            while (y < image.height) : (y += 1) {
+                const row_start = y * image.stride;
+                const row_end = row_start + image.width * bpp;
+                if (row_end <= image.data.len) {
+                    c.png_write_row(png, image.data.ptr + row_start);
+                }
+            }
+        }
+    } else {
+        // Non-alpha formats, write directly
+        var y: u32 = 0;
+        while (y < image.height) : (y += 1) {
+            const row_start = y * image.stride;
+            const row_end = row_start + image.width * bpp;
+            if (row_end <= image.data.len) {
+                c.png_write_row(png, image.data.ptr + row_start);
+            }
         }
     }
 
