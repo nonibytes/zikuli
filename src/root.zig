@@ -70,11 +70,17 @@ pub const Region = region.Region;
 // ============================================================================
 
 pub const xtest = @import("xtest.zig");
+pub const keyboard = @import("keyboard.zig");
 
 // Re-export XTest types
 pub const Mouse = xtest.Mouse;
 pub const MouseButton = xtest.MouseButton;
 pub const MouseState = xtest.MouseState;
+
+// Re-export Keyboard types
+pub const Keyboard = keyboard.Keyboard;
+pub const KeySym = keyboard.KeySym;
+pub const KeyModifier = keyboard.Modifier;
 
 // ============================================================================
 // Modules to be added in later phases
@@ -150,4 +156,5 @@ test {
     _ = screen;
     _ = image;
     _ = xtest;
+    _ = keyboard;
 }

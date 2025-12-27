@@ -240,4 +240,22 @@ pub fn build(b: *std.Build) void {
     const run_test_mouse = b.addRunArtifact(test_mouse);
     const test_mouse_step = b.step("test-mouse", "Run XTest mouse control verification test");
     test_mouse_step.dependOn(&run_test_mouse.step);
+
+    // Test keyboard executable for verifying XTest keyboard control (Phase 6)
+    const test_keyboard = b.addExecutable(.{
+        .name = "test_keyboard",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_keyboard.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_keyboard);
+
+    const run_test_keyboard = b.addRunArtifact(test_keyboard);
+    const test_keyboard_step = b.step("test-keyboard", "Run XTest keyboard control verification test");
+    test_keyboard_step.dependOn(&run_test_keyboard.step);
 }
