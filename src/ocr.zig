@@ -67,6 +67,8 @@ pub const OCR = struct {
     /// Initialize the OCR engine with a custom tessdata path
     pub fn initWithDatapath(allocator: std.mem.Allocator, datapath: ?[]const u8) !Self {
         const handle = tesseract.c.TessBaseAPICreate();
+        // Ensure handle is deleted if initialization fails
+        errdefer tesseract.c.TessBaseAPIDelete(handle);
 
         var self = Self{
             .allocator = allocator,
@@ -80,6 +82,8 @@ pub const OCR = struct {
         if (datapath) |dp| {
             self.datapath = try allocator.dupeZ(u8, dp);
         }
+        // Ensure datapath is freed if initEngine fails
+        errdefer if (self.datapath) |dp| allocator.free(dp);
 
         // Initialize with default language
         try self.initEngine();

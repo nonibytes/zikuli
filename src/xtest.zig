@@ -67,7 +67,8 @@ var global_state: MouseState = .{};
 var global_connection: ?XTestConnection = null;
 
 /// Get or create the global XTest connection
-fn getConnection() !*XTestConnection {
+/// This is the single shared connection used by both mouse and keyboard modules
+pub fn getConnection() !*XTestConnection {
     if (global_connection == null) {
         global_connection = XTestConnection.connectDefault() catch |err| {
             return err;

@@ -14,6 +14,7 @@
 const std = @import("std");
 const geometry = @import("geometry.zig");
 const platform_xtest = @import("platform/xtest.zig");
+const xtest = @import("xtest.zig");
 const XTestConnection = platform_xtest.XTestConnection;
 
 /// Key delay between press and release (from SikuliX Settings)
@@ -122,17 +123,10 @@ pub const KeyboardState = struct {
 /// Global keyboard state
 var global_state: KeyboardState = .{};
 
-/// Global XTest connection (shared with mouse module)
-var global_connection: ?XTestConnection = null;
-
-/// Get or create the global XTest connection
+/// Get the shared XTest connection (from xtest module)
+/// This ensures mouse and keyboard share a single X11 display connection
 fn getConnection() !*XTestConnection {
-    if (global_connection == null) {
-        global_connection = XTestConnection.connectDefault() catch |err| {
-            return err;
-        };
-    }
-    return &global_connection.?;
+    return xtest.getConnection();
 }
 
 /// XTest keyboard controller
@@ -193,13 +187,45 @@ pub const Keyboard = struct {
     }
 
     /// Press a key with modifiers
+    /// Modifiers are released even if the key press fails (via errdefer)
     pub fn pressWithModifiers(keysym: u32, modifiers: u32) !void {
+        // Track which modifiers we pressed so we can release them on error
+        var ctrl_pressed = false;
+        var shift_pressed = false;
+        var alt_pressed = false;
+        var meta_pressed = false;
+        var super_pressed = false;
+
+        // Ensure all pressed modifiers are released if anything fails
+        errdefer {
+            if (super_pressed) keyUp(KeySym.Super_L) catch {};
+            if (meta_pressed) keyUp(KeySym.Meta_L) catch {};
+            if (alt_pressed) keyUp(KeySym.Alt_L) catch {};
+            if (shift_pressed) keyUp(KeySym.Shift_L) catch {};
+            if (ctrl_pressed) keyUp(KeySym.Control_L) catch {};
+        }
+
         // Press modifiers
-        if (modifiers & Modifier.CTRL != 0) try keyDown(KeySym.Control_L);
-        if (modifiers & Modifier.SHIFT != 0) try keyDown(KeySym.Shift_L);
-        if (modifiers & Modifier.ALT != 0) try keyDown(KeySym.Alt_L);
-        if (modifiers & Modifier.META != 0) try keyDown(KeySym.Meta_L);
-        if (modifiers & Modifier.SUPER != 0) try keyDown(KeySym.Super_L);
+        if (modifiers & Modifier.CTRL != 0) {
+            try keyDown(KeySym.Control_L);
+            ctrl_pressed = true;
+        }
+        if (modifiers & Modifier.SHIFT != 0) {
+            try keyDown(KeySym.Shift_L);
+            shift_pressed = true;
+        }
+        if (modifiers & Modifier.ALT != 0) {
+            try keyDown(KeySym.Alt_L);
+            alt_pressed = true;
+        }
+        if (modifiers & Modifier.META != 0) {
+            try keyDown(KeySym.Meta_L);
+            meta_pressed = true;
+        }
+        if (modifiers & Modifier.SUPER != 0) {
+            try keyDown(KeySym.Super_L);
+            super_pressed = true;
+        }
 
         // Press the key
         try press(keysym);

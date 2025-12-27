@@ -378,6 +378,21 @@ pub const ImageError = error{
 // ============================================================================
 // PNG I/O using libpng
 // ============================================================================
+//
+// WARNING: libpng uses setjmp/longjmp for error handling. If libpng encounters
+// an internal error during png_read_image or png_write_image, it will longjmp
+// past Zig's defer mechanisms, potentially causing memory leaks.
+//
+// This is a fundamental issue with C libraries that use longjmp. The proper
+// solution would require either:
+// 1. Using libpng's png_set_error_fn() with a custom error handler
+// 2. Wrapping libpng in a C wrapper that catches the longjmp
+// 3. Using a pure Zig PNG library instead
+//
+// For most use cases, PNG files are well-formed and this is not an issue.
+// If you're processing untrusted PNG files at scale, consider using a
+// safer alternative.
+// ============================================================================
 
 /// Load image from PNG file
 pub fn loadPng(allocator: std.mem.Allocator, path: []const u8) !Image {

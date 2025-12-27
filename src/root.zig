@@ -142,6 +142,19 @@ pub fn getVersion() []const u8 {
     return version_string;
 }
 
+/// Clean up global library resources
+///
+/// This function releases the shared X11 display connection used by
+/// Mouse and Keyboard modules. Call this when completely done using
+/// Zikuli to avoid resource leaks.
+///
+/// Note: This is optional for short-lived processes, as the OS will
+/// clean up on exit. For long-running processes or library unload
+/// scenarios, this should be called.
+pub fn deinit() void {
+    xtest.deinit();
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
