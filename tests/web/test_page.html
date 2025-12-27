@@ -231,15 +231,20 @@
             logContainer.scrollTop = logContainer.scrollHeight;
 
             // Update stats
+            let eventType = type;
             if (type === 'click') {
                 if (message.includes('DOUBLE-CLICK')) {
                     stats.dblclicks++;
                     document.getElementById('dblclick-count').textContent = stats.dblclicks;
+                    eventType = 'dblclick';
                 } else {
                     stats.clicks++;
                     document.getElementById('click-count').textContent = stats.clicks;
                 }
             } else if (type === 'drag') {
+                if (message.includes('DROP SUCCESS')) {
+                    eventType = 'drop';
+                }
                 stats.drags++;
                 document.getElementById('drag-count').textContent = stats.drags;
             } else if (type === 'scroll') {
@@ -249,6 +254,13 @@
 
             // Log to console for verification
             console.log(`ZIKULI_EVENT: ${type} - ${message}`);
+
+            // POST to server for verification
+            fetch('/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: eventType, message: message, timestamp: Date.now() })
+            }).catch(() => {}); // Ignore errors if server not running
         }
 
         // Drag and Drop
