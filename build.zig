@@ -39,7 +39,14 @@ pub fn build(b: *std.Build) void {
         // Later on we'll use this module as the root module of a test executable
         // which requires us to specify a target.
         .target = target,
+        // Link X11/XCB libraries for screen capture
+        .link_libc = true,
     });
+
+    // Link X11/XCB system libraries
+    mod.linkSystemLibrary("xcb", .{});
+    mod.linkSystemLibrary("xcb-shm", .{});
+    mod.linkSystemLibrary("xcb-image", .{});
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
@@ -153,4 +160,26 @@ pub fn build(b: *std.Build) void {
     //
     // Lastly, the Zig build system is relatively simple and self-contained,
     // and reading its source code will allow you to master it.
+
+    // ========================================================================
+    // Integration Tests (verification tests with actual X11)
+    // ========================================================================
+
+    // Test capture executable for verifying X11 screen capture
+    const test_capture = b.addExecutable(.{
+        .name = "test_capture",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_capture.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_capture);
+
+    const run_test_capture = b.addRunArtifact(test_capture);
+    const test_capture_step = b.step("test-capture", "Run X11 capture verification test");
+    test_capture_step.dependOn(&run_test_capture.step);
 }

@@ -42,6 +42,16 @@ pub const pattern = @import("pattern.zig");
 pub const match = @import("match.zig");
 pub const region = @import("region.zig");
 
+// ============================================================================
+// Platform Modules (Phase 2)
+// ============================================================================
+
+pub const x11 = @import("platform/x11.zig");
+pub const screen = @import("screen.zig");
+
+// Re-export Screen
+pub const Screen = screen.Screen;
+
 // Convenience re-exports - Core Types
 pub const Point = geometry.Point;
 pub const Location = geometry.Location;
@@ -135,4 +145,6 @@ test {
     _ = pattern;
     _ = match;
     _ = region;
+    _ = x11;
+    _ = screen;
 }
