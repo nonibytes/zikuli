@@ -25,12 +25,19 @@ const image_mod = @import("image.zig");
 const finder_mod = @import("finder.zig");
 const match_mod = @import("match.zig");
 const xtest = @import("xtest.zig");
+const keyboard_mod = @import("keyboard.zig");
+const errors = @import("errors.zig");
 
 const Screen = screen_mod.Screen;
 const Image = image_mod.Image;
 const Finder = finder_mod.Finder;
 const Match = match_mod.Match;
 const Mouse = xtest.Mouse;
+const Keyboard = keyboard_mod.Keyboard;
+const KeySym = keyboard_mod.KeySym;
+const Modifier = keyboard_mod.Modifier;
+const FindFailed = errors.FindFailed;
+const FindFailedResponse = errors.FindFailedResponse;
 
 /// Default wait timeout for find operations (seconds)
 pub const DEFAULT_AUTO_WAIT_TIMEOUT: f64 = 3.0;
@@ -444,6 +451,258 @@ pub const Region = struct {
     pub fn rightClickCenter(self: Region) !void {
         const c = self.center();
         try Mouse.clickAt(c.x, c.y, .right);
+    }
+
+    // ========================================================================
+    // SikuliX-Style API (Phase 11: Enhanced Operations)
+    // ========================================================================
+
+    /// Find an image pattern - throws FindFailed if not found (SikuliX-style)
+    /// Unlike findImage() which returns null, this throws an error if not found.
+    /// Use exists() or findImage() if you want to check without throwing.
+    pub fn find(self: Region, allocator: std.mem.Allocator, template: *const Image) !Match {
+        const start = std.time.milliTimestamp();
+        const timeout_ms: i64 = @intFromFloat(self.auto_wait_timeout * 1000.0);
+
+        while (true) {
+            if (try self.findImage(allocator, template)) |match_result| {
+                return match_result;
+            }
+
+            const elapsed = std.time.milliTimestamp() - start;
+            if (elapsed >= timeout_ms) {
+                // FindFailed - like SikuliX
+                return error.FindFailed;
+            }
+
+            // Small delay between retries (like SikuliX WaitScanRate)
+            std.Thread.sleep(100 * std.time.ns_per_ms);
+        }
+    }
+
+    /// Find all occurrences of an image pattern
+    /// Returns a slice of all matches found. Caller must free with allocator.
+    pub fn findAll(self: Region, allocator: std.mem.Allocator, template: *const Image) ![]Match {
+        // Capture this region
+        var region_image = try self.captureImage(allocator);
+        defer region_image.deinit();
+
+        // Search for all matches
+        var finder = Finder.init(allocator, &region_image);
+        defer finder.deinit();
+
+        const local_matches = try finder.findAll(template);
+        defer allocator.free(local_matches);
+
+        // Convert to screen coordinates
+        var result = try allocator.alloc(Match, local_matches.len);
+        for (local_matches, 0..) |m, i| {
+            result[i] = Match.initAt(
+                self.rect.x + m.bounds.x,
+                self.rect.y + m.bounds.y,
+                m.bounds.width,
+                m.bounds.height,
+                m.score,
+            );
+        }
+
+        return result;
+    }
+
+    /// Check if target exists (SikuliX-style)
+    /// Returns the Match if found within timeout, null otherwise.
+    /// Never throws FindFailed.
+    pub fn exists(self: Region, allocator: std.mem.Allocator, template: *const Image, timeout_sec: ?f64) !?Match {
+        const timeout = timeout_sec orelse self.auto_wait_timeout;
+        return self.waitImage(allocator, template, timeout);
+    }
+
+    /// Wait for target to appear (SikuliX-style)
+    /// Returns the Match if found, throws FindFailed if timeout.
+    pub fn wait(self: Region, allocator: std.mem.Allocator, template: *const Image, timeout_sec: ?f64) !Match {
+        const timeout = timeout_sec orelse self.auto_wait_timeout;
+        if (try self.waitImage(allocator, template, timeout)) |match_result| {
+            return match_result;
+        }
+        return error.FindFailed;
+    }
+
+    /// Wait for target to vanish (SikuliX-style)
+    /// Returns true if vanished, throws Timeout if still present.
+    pub fn waitVanish(self: Region, allocator: std.mem.Allocator, template: *const Image, timeout_sec: ?f64) !bool {
+        const timeout = timeout_sec orelse self.auto_wait_timeout;
+        if (try self.waitVanishImage(allocator, template, timeout)) {
+            return true;
+        }
+        return error.Timeout;
+    }
+
+    /// Click on target (SikuliX-style)
+    /// Finds the target first, then clicks on it.
+    /// Throws FindFailed if target not found.
+    pub fn click(self: Region, allocator: std.mem.Allocator, template: *const Image) !Match {
+        const match_result = try self.find(allocator, template);
+        const target = match_result.center();
+        try Mouse.clickAt(target.x, target.y, .left);
+        return match_result;
+    }
+
+    /// Click with keyboard modifiers (Ctrl+Click, Shift+Click, etc.)
+    pub fn clickWithModifiers(self: Region, allocator: std.mem.Allocator, template: *const Image, modifiers: u32) !Match {
+        const match_result = try self.find(allocator, template);
+        const target = match_result.center();
+
+        // Press modifiers
+        if (modifiers & Modifier.CTRL != 0) try Keyboard.keyDown(KeySym.Control_L);
+        if (modifiers & Modifier.SHIFT != 0) try Keyboard.keyDown(KeySym.Shift_L);
+        if (modifiers & Modifier.ALT != 0) try Keyboard.keyDown(KeySym.Alt_L);
+        if (modifiers & Modifier.META != 0) try Keyboard.keyDown(KeySym.Meta_L);
+
+        // Click
+        try Mouse.clickAt(target.x, target.y, .left);
+
+        // Release modifiers
+        if (modifiers & Modifier.META != 0) try Keyboard.keyUp(KeySym.Meta_L);
+        if (modifiers & Modifier.ALT != 0) try Keyboard.keyUp(KeySym.Alt_L);
+        if (modifiers & Modifier.SHIFT != 0) try Keyboard.keyUp(KeySym.Shift_L);
+        if (modifiers & Modifier.CTRL != 0) try Keyboard.keyUp(KeySym.Control_L);
+
+        return match_result;
+    }
+
+    /// Double-click on target (SikuliX-style)
+    pub fn doubleClick(self: Region, allocator: std.mem.Allocator, template: *const Image) !Match {
+        const match_result = try self.find(allocator, template);
+        const target = match_result.center();
+        try Mouse.smoothMoveTo(target.x, target.y);
+        try Mouse.doubleClick(.left);
+        return match_result;
+    }
+
+    /// Right-click on target (SikuliX-style)
+    pub fn rightClick(self: Region, allocator: std.mem.Allocator, template: *const Image) !Match {
+        const match_result = try self.find(allocator, template);
+        const target = match_result.center();
+        try Mouse.clickAt(target.x, target.y, .right);
+        return match_result;
+    }
+
+    /// Hover over target (move mouse without clicking) (SikuliX-style)
+    pub fn hover(self: Region, allocator: std.mem.Allocator, template: *const Image) !Match {
+        const match_result = try self.find(allocator, template);
+        const target = match_result.center();
+        try Mouse.smoothMoveTo(target.x, target.y);
+        return match_result;
+    }
+
+    /// Hover at region center
+    pub fn hoverCenter(self: Region) !void {
+        const c = self.center();
+        try Mouse.smoothMoveTo(c.x, c.y);
+    }
+
+    /// Type text at target location (find, click, then type) (SikuliX-style)
+    pub fn typeAt(self: Region, allocator: std.mem.Allocator, template: *const Image, text: []const u8) !Match {
+        const match_result = try self.click(allocator, template);
+        std.Thread.sleep(50 * std.time.ns_per_ms); // Small delay for focus
+        try Keyboard.typeText(text);
+        return match_result;
+    }
+
+    /// Type text at region center
+    pub fn typeText(self: Region, text: []const u8) !void {
+        try self.clickCenter();
+        std.Thread.sleep(50 * std.time.ns_per_ms); // Small delay for focus
+        try Keyboard.typeText(text);
+    }
+
+    /// Type text with modifiers (e.g., Ctrl+A to select all)
+    pub fn typeWithModifiers(self: Region, text: []const u8, modifiers: u32) !void {
+        try self.clickCenter();
+        std.Thread.sleep(50 * std.time.ns_per_ms);
+
+        // Press modifiers
+        if (modifiers & Modifier.CTRL != 0) try Keyboard.keyDown(KeySym.Control_L);
+        if (modifiers & Modifier.SHIFT != 0) try Keyboard.keyDown(KeySym.Shift_L);
+        if (modifiers & Modifier.ALT != 0) try Keyboard.keyDown(KeySym.Alt_L);
+        if (modifiers & Modifier.META != 0) try Keyboard.keyDown(KeySym.Meta_L);
+
+        try Keyboard.typeText(text);
+
+        // Release modifiers
+        if (modifiers & Modifier.META != 0) try Keyboard.keyUp(KeySym.Meta_L);
+        if (modifiers & Modifier.ALT != 0) try Keyboard.keyUp(KeySym.Alt_L);
+        if (modifiers & Modifier.SHIFT != 0) try Keyboard.keyUp(KeySym.Shift_L);
+        if (modifiers & Modifier.CTRL != 0) try Keyboard.keyUp(KeySym.Control_L);
+    }
+
+    /// Press a key or key combination (SikuliX-style hotkey)
+    pub fn hotkey(self: Region, keysym: u32, modifiers: u32) !void {
+        try self.clickCenter();
+        std.Thread.sleep(50 * std.time.ns_per_ms);
+        try Keyboard.pressWithModifiers(keysym, modifiers);
+    }
+
+    /// Drag from this region's center to a destination
+    pub fn dragTo(self: Region, dest_x: i32, dest_y: i32) !void {
+        const c = self.center();
+        try Mouse.dragFromTo(c.x, c.y, dest_x, dest_y, .left);
+    }
+
+    /// Drag from target to a destination
+    pub fn drag(self: Region, allocator: std.mem.Allocator, template: *const Image, dest_x: i32, dest_y: i32) !Match {
+        const match_result = try self.find(allocator, template);
+        const src = match_result.center();
+        try Mouse.dragFromTo(src.x, src.y, dest_x, dest_y, .left);
+        return match_result;
+    }
+
+    /// Drag from one target to another
+    pub fn dragDrop(self: Region, allocator: std.mem.Allocator, src_template: *const Image, dest_template: *const Image) !void {
+        const src_match = try self.find(allocator, src_template);
+        const dest_match = try self.find(allocator, dest_template);
+        const src = src_match.center();
+        const dest = dest_match.center();
+        try Mouse.dragFromTo(src.x, src.y, dest.x, dest.y, .left);
+    }
+
+    /// Drop at this region's center (used after drag)
+    pub fn drop(self: Region) !void {
+        const c = self.center();
+        try Mouse.smoothMoveTo(c.x, c.y);
+        try Mouse.buttonUp(.left);
+    }
+
+    /// Scroll wheel at region center
+    pub fn wheel(self: Region, direction: xtest.MouseButton, steps: u32) !void {
+        const c = self.center();
+        try Mouse.smoothMoveTo(c.x, c.y);
+        try Mouse.wheel(direction, steps);
+    }
+
+    /// Scroll up at region center
+    pub fn wheelUp(self: Region, steps: u32) !void {
+        try self.wheel(.wheel_up, steps);
+    }
+
+    /// Scroll down at region center
+    pub fn wheelDown(self: Region, steps: u32) !void {
+        try self.wheel(.wheel_down, steps);
+    }
+
+    /// Get a string representation for error messages
+    pub fn toStr(self: Region) [64]u8 {
+        var buf: [64]u8 = undefined;
+        const written = std.fmt.bufPrint(&buf, "Region[{d},{d} {d}x{d}]", .{
+            self.rect.x,
+            self.rect.y,
+            self.rect.width,
+            self.rect.height,
+        }) catch "Region[?]";
+        var result: [64]u8 = undefined;
+        @memcpy(result[0..written.len], written);
+        result[written.len] = 0;
+        return result;
     }
 
     pub fn format(

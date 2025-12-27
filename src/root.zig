@@ -42,6 +42,7 @@ pub const pattern = @import("pattern.zig");
 pub const match = @import("match.zig");
 pub const region = @import("region.zig");
 pub const finder = @import("finder.zig");
+pub const errors = @import("errors.zig");
 
 // ============================================================================
 // Platform Modules (Phase 2)
@@ -68,6 +69,14 @@ pub const Rectangle = geometry.Rectangle;
 pub const Pattern = pattern.Pattern;
 pub const Match = match.Match;
 pub const Region = region.Region;
+
+// Error types (SikuliX-style exceptions)
+pub const FindFailed = errors.FindFailed;
+pub const FindFailedResponse = errors.FindFailedResponse;
+pub const TimeoutError = errors.TimeoutError;
+pub const ZikuliError = errors.ZikuliError;
+pub const setFindFailedResponse = errors.setFindFailedResponse;
+pub const getFindFailedResponse = errors.getFindFailedResponse;
 
 // ============================================================================
 // Input Modules (Phase 5)
@@ -157,6 +166,8 @@ test {
     _ = pattern;
     _ = match;
     _ = region;
+    _ = finder;
+    _ = errors;
     _ = x11;
     _ = platform_xtest;
     _ = xrandr;
