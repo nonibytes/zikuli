@@ -990,6 +990,76 @@ pub fn main() !void {
 
 ---
 
+### Phase 10: Real-World Automation Examples (FINAL VALIDATION)
+**Estimated Files**: 5+ | **Validation**: Zikuli solves actual real-world tasks
+
+This is the ultimate test of Zikuli - can it automate real applications?
+
+**Real-World Tasks to Automate:**
+
+1. **Web Browser Automation** (`examples/real_world/browser_automation.zig`)
+   - Open Firefox/Chrome
+   - Navigate to a website
+   - Find and click a button
+   - Fill in a form
+   - Submit and verify result
+
+2. **File Manager Automation** (`examples/real_world/file_manager.zig`)
+   - Open file manager (Nautilus/Dolphin)
+   - Navigate to a folder
+   - Create new folder
+   - Rename file
+   - Delete file (with confirmation dialog)
+
+3. **Text Editor Automation** (`examples/real_world/text_editor.zig`)
+   - Open gedit/kate
+   - Type text
+   - Save file with specific name
+   - Close application
+
+4. **Multi-Application Workflow** (`examples/real_world/multi_app_workflow.zig`)
+   - Copy data from web browser
+   - Paste into spreadsheet application
+   - Save spreadsheet
+
+5. **Error Handling Scenarios** (`examples/real_world/error_handling.zig`)
+   - Handle "element not found" gracefully
+   - Implement retry logic
+   - Screenshot on failure for debugging
+
+**Validation Process:**
+
+```python
+# tests/playwright/test_real_world.py
+# Use Playwright to set up scenarios, then run Zikuli automation
+
+def test_browser_form_fill():
+    # 1. Playwright opens browser to test form page
+    # 2. Run Zikuli automation to fill the form
+    # 3. Playwright verifies form was submitted correctly
+    pass
+
+def test_file_operations():
+    # 1. Create test directory structure
+    # 2. Run Zikuli file manager automation
+    # 3. Verify files were created/renamed/moved correctly
+    pass
+```
+
+**Success Criteria for Phase 10:**
+- [ ] At least 3 different real applications automated successfully
+- [ ] Each automation runs end-to-end without manual intervention
+- [ ] Error scenarios are handled gracefully
+- [ ] Performance is acceptable (< 5s per action)
+- [ ] Screenshots captured at key steps for debugging
+- [ ] Works on fresh Ubuntu/Mint installation
+
+**Paranoid Review Focus**: Does Zikuli actually WORK in the real world? Not just tests!
+
+**Commit**: `feat: add real-world automation examples`
+
+---
+
 ## Validation-Driven Development Process
 
 ### After Each Phase
@@ -1104,7 +1174,7 @@ Each phase = 1-2 commits. Maximum ~20 commits for full implementation.
 
 The implementation is complete when:
 
-1. [ ] All 9 phases complete with passing tests
+1. [ ] All 10 phases complete with passing tests
 2. [ ] Example automation script successfully:
    - Captures screen
    - Finds image pattern
@@ -1113,6 +1183,10 @@ The implementation is complete when:
 3. [ ] No memory leaks (verified with valgrind)
 4. [ ] Works on fresh Ubuntu/Mint installation
 5. [ ] README with usage instructions exists
+6. [ ] **REAL-WORLD VALIDATION**: At least 3 actual applications automated end-to-end
+   - Web browser (form fill, navigation)
+   - File manager (create/rename/delete files)
+   - Text editor (type, save, close)
 
 ---
 
