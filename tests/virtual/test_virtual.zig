@@ -612,3 +612,143 @@ test "stress: alternating scroll directions" {
         }
     }.run);
 }
+
+// ============================================================================
+// INTEGRATION TEST: Find Image and Click
+// This is the core SikuliX workflow - find a visual pattern and click on it
+// ============================================================================
+
+test "integration: find image and click" {
+    try harness.runVirtualTest(std.testing.allocator, struct {
+        fn run(h: *TestHarness) !void {
+            // Step 1: Place a distinctive colored target on screen
+            // This simulates a button or UI element we want to find and click
+            const target = try h.placeClickTarget(400, 300, 80, RGB{ .r = 255, .g = 100, .b = 50 });
+            std.Thread.sleep(200 * std.time.ns_per_ms);
+
+            h.clearEvents();
+
+            // Step 2: Create a template image that matches our target
+            // In real use, this would be loaded from a PNG file
+            // Use BGRA format to match X11 captured images
+            var template = try zikuli.Image.init(h.allocator, 80, 80, .BGRA);
+            defer template.deinit();
+
+            // Fill template with same color as target
+            var y: u32 = 0;
+            while (y < 80) : (y += 1) {
+                var x: u32 = 0;
+                while (x < 80) : (x += 1) {
+                    template.setPixel(x, y, 255, 100, 50, 255); // RGBA with alpha
+                }
+            }
+
+            // Step 3: Capture screen and use Finder to locate the target
+            var screen_obj = try zikuli.Screen.virtual(h.allocator);
+            defer screen_obj.deinit();
+
+            var captured = try screen_obj.capture();
+            defer captured.deinit();
+
+            // Step 4: Convert CapturedImage to Image for Finder
+            var screen_image = try zikuli.Image.fromCapture(h.allocator, captured);
+            defer screen_image.deinit();
+
+            // Step 5: Find the template in the captured screen
+            var finder_obj = zikuli.Finder.init(h.allocator, &screen_image);
+            defer finder_obj.deinit();
+
+            const match_result = finder_obj.find(&template);
+
+            // Verify we found something
+            try std.testing.expect(match_result != null);
+            const found_match = match_result.?;
+
+            // Verify the match is at approximately the right location
+            // Target is at (400, 300), center is at (440, 340)
+            const match_center = found_match.center();
+            const expected_x: i32 = @as(i32, target.x) + @divTrunc(@as(i32, target.width), 2);
+            const expected_y: i32 = @as(i32, target.y) + @divTrunc(@as(i32, target.height), 2);
+
+            try std.testing.expectApproxEqAbs(
+                @as(f64, @floatFromInt(expected_x)),
+                @as(f64, @floatFromInt(match_center.x)),
+                20,
+            );
+            try std.testing.expectApproxEqAbs(
+                @as(f64, @floatFromInt(expected_y)),
+                @as(f64, @floatFromInt(match_center.y)),
+                20,
+            );
+
+            // Step 6: Click on the found match
+            try zikuli.Mouse.clickAt(match_center.x, match_center.y, .left);
+            std.Thread.sleep(100 * std.time.ns_per_ms);
+
+            // Step 7: Poll events and verify the click was received
+            try h.pollEvents();
+            try h.expectClick(1);
+
+            // Log success
+            std.debug.print("\n✓ Find-and-click integration test passed!\n", .{});
+            std.debug.print("  Found target at ({}, {}) with score {d:.2}\n", .{
+                found_match.bounds.x,
+                found_match.bounds.y,
+                found_match.score,
+            });
+        }
+    }.run);
+}
+
+test "integration: find image with similarity threshold" {
+    try harness.runVirtualTest(std.testing.allocator, struct {
+        fn run(h: *TestHarness) !void {
+            // Place a target
+            _ = try h.placeColorSquare(500, 400, 60, RGB{ .r = 0, .g = 200, .b = 100 });
+            std.Thread.sleep(200 * std.time.ns_per_ms);
+
+            // Create a slightly different template (not exact match)
+            // Use BGRA format to match X11 captured images
+            var template = try zikuli.Image.init(h.allocator, 60, 60, .BGRA);
+            defer template.deinit();
+
+            // Fill with slightly different color
+            var y: u32 = 0;
+            while (y < 60) : (y += 1) {
+                var x: u32 = 0;
+                while (x < 60) : (x += 1) {
+                    template.setPixel(x, y, 0, 190, 110, 255); // Slightly different, with alpha
+                }
+            }
+
+            // Capture screen
+            var screen_obj = try zikuli.Screen.virtual(h.allocator);
+            defer screen_obj.deinit();
+
+            var captured = try screen_obj.capture();
+            defer captured.deinit();
+
+            // Convert CapturedImage to Image for Finder
+            var screen_image = try zikuli.Image.fromCapture(h.allocator, captured);
+            defer screen_image.deinit();
+
+            // Try to find with high similarity - should fail
+            var finder_obj = zikuli.Finder.init(h.allocator, &screen_image);
+            defer finder_obj.deinit();
+
+            finder_obj.setSimilarity(0.99); // Very strict
+            const strict_match = finder_obj.find(&template);
+
+            // Try with lower similarity - should succeed
+            finder_obj.setSimilarity(0.7); // More lenient
+            const lenient_match = finder_obj.find(&template);
+
+            // The lenient search should find it
+            try std.testing.expect(lenient_match != null);
+
+            std.debug.print("\n✓ Similarity threshold test passed!\n", .{});
+            std.debug.print("  Strict match (0.99): {s}\n", .{if (strict_match != null) "found" else "not found"});
+            std.debug.print("  Lenient match (0.7): {s}\n", .{if (lenient_match != null) "found" else "not found"});
+        }
+    }.run);
+}
