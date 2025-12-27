@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Zikuli Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 50px;
+            background: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+        }
+        .button-container {
+            margin: 30px 0;
+        }
+        .test-button {
+            padding: 20px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            margin: 10px;
+            border-radius: 5px;
+        }
+        #red-button {
+            background: #ff6432;
+            color: white;
+        }
+        #green-button {
+            background: #32c864;
+            color: white;
+        }
+        #blue-button {
+            background: #3264ff;
+            color: white;
+        }
+        #click-counter {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .click-log {
+            font-family: monospace;
+            margin: 5px 0;
+            padding: 5px;
+            background: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <h1>Zikuli Button Test</h1>
+    <p>Click the buttons below - each click will be logged.</p>
+
+    <div class="button-container">
+        <button id="red-button" class="test-button" onclick="logClick('RED')">RED BUTTON</button>
+        <button id="green-button" class="test-button" onclick="logClick('GREEN')">GREEN BUTTON</button>
+        <button id="blue-button" class="test-button" onclick="logClick('BLUE')">BLUE BUTTON</button>
+    </div>
+
+    <div id="click-counter">
+        <h3>Click Log:</h3>
+        <div id="log-container">
+            <div class="click-log">Waiting for clicks...</div>
+        </div>
+        <p>Total clicks: <span id="total-clicks">0</span></p>
+    </div>
+
+    <script>
+        let clickCount = 0;
+        const logContainer = document.getElementById('log-container');
+        const totalClicks = document.getElementById('total-clicks');
+
+        function logClick(color) {
+            clickCount++;
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'click-log';
+            logEntry.textContent = `[${timestamp}] ${color} button clicked! (Click #${clickCount})`;
+            logContainer.appendChild(logEntry);
+            totalClicks.textContent = clickCount;
+
+            // Also log to console for verification
+            console.log(`ZIKULI_CLICK: ${color} ${clickCount}`);
+        }
+    </script>
+</body>
+</html>

@@ -402,6 +402,24 @@ pub fn build(b: *std.Build) void {
     const virtual_unit_test_step = b.step("test-virtual-unit", "Run virtual harness unit tests");
     virtual_unit_test_step.dependOn(&run_virtual_tests.step);
 
+    // Web button test - real-world test with browser
+    const web_test = b.addExecutable(.{
+        .name = "web-test",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/web/test_web_buttons.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(web_test);
+
+    const run_web_test = b.addRunArtifact(web_test);
+    const web_test_step = b.step("web-test", "Run real-world web button test (requires browser)");
+    web_test_step.dependOn(&run_web_test.step);
+
     // SikuliX-Style API test (Phase 11)
     const test_sikulix_api = b.addExecutable(.{
         .name = "test_sikulix_api",
