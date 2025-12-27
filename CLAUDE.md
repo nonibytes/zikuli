@@ -24,7 +24,7 @@
 
 ## Current Phase
 
-**All Phases Complete!**
+**All Phases Complete + Multi-Monitor Support**
 
 Completed Phases:
 - Phase 0-4: Core types, geometry, X11 capture, OpenCV template matching
@@ -34,6 +34,7 @@ Completed Phases:
 - Phase 8: OCR with Tesseract (9 tests passed, 400 words detected)
 - Phase 9: High-level API and examples (4 examples working)
 - Phase 10: Real-world automation examples (3 examples verified)
+- Multi-Monitor: XRandR support for per-monitor capture (like SikuliX)
 
 ## Decisions
 
@@ -59,16 +60,28 @@ Completed Phases:
 
 None currently.
 
+## Multi-Monitor Support
+
+- **XRandR** enumerates individual monitors (like SikuliX's ScreenDevice.java)
+- `Screen.primary()` / `Screen.get(0)` returns primary monitor bounds only (e.g., 1920x1080)
+- `Screen.get(1)` returns second monitor bounds (e.g., 1920x1080 at x=1920)
+- `Screen.virtual()` returns combined virtual screen (e.g., 3840x1080)
+- `Screen.capture()` now captures only that monitor's region, not the full virtual screen
+- `Screen.getMonitorCount()` returns number of connected monitors
+- Test: `zig build test-multimonitor` verifies XRandR enumeration
+
 ## Discovered Constraints
 
 - X11 only (no Wayland support initially)
 - OpenCV required for template matching
 - Tesseract required for OCR
+- XRandR required for multi-monitor support on Linux
 - OpenCV 4.x C API headers require C++11 (created C++ wrapper to solve)
 - Zig 0.15 deprecated `std.io.getStdOut()` - use `std.fs.File.stdout().deprecatedWriter()`
 - Zig 0.15 strict about parameter shadowing - rename parameters if they shadow other names
 - Zig 0.15 `std.Thread.sleep` replaces `std.time.sleep` in executable contexts
 - Zig 0.15 `std.ArrayList(T)` is now unmanaged: use `.empty` instead of `.init(allocator)`, pass allocator to `append()`, `deinit()`, `toOwnedSlice()`
+- OCR struggles with white text on colored backgrounds - use dark text on light buttons for better recognition
 
 ## User Preferences
 

@@ -52,6 +52,9 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("X11", .{});
     mod.linkSystemLibrary("Xtst", .{});
 
+    // Link XRandR for multi-monitor support (like SikuliX)
+    mod.linkSystemLibrary("Xrandr", .{});
+
     // Link image handling libraries
     mod.linkSystemLibrary("png", .{});
 
@@ -299,6 +302,60 @@ pub fn build(b: *std.Build) void {
     const test_ocr_step = b.step("test-ocr", "Run Tesseract OCR integration test (Phase 8)");
     test_ocr_step.dependOn(&run_test_ocr.step);
 
+    // Test multi-monitor support using XRandR
+    const test_multimonitor = b.addExecutable(.{
+        .name = "test_multimonitor",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_multimonitor.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_multimonitor);
+
+    const run_test_multimonitor = b.addRunArtifact(test_multimonitor);
+    const test_multimonitor_step = b.step("test-multimonitor", "Run multi-monitor support test (XRandR)");
+    test_multimonitor_step.dependOn(&run_test_multimonitor.step);
+
+    // Debug test for click issues
+    const test_click_debug = b.addExecutable(.{
+        .name = "test_click_debug",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_click_debug.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_click_debug);
+
+    const run_test_click_debug = b.addRunArtifact(test_click_debug);
+    const test_click_debug_step = b.step("test-click-debug", "Run click debug test for multi-monitor issues");
+    test_click_debug_step.dependOn(&run_test_click_debug.step);
+
+    // Screenshot debug test
+    const test_screenshot = b.addExecutable(.{
+        .name = "test_screenshot",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_screenshot.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_screenshot);
+
+    const run_test_screenshot = b.addRunArtifact(test_screenshot);
+    const test_screenshot_step = b.step("test-screenshot", "Capture and save screenshot for debugging");
+    test_screenshot_step.dependOn(&run_test_screenshot.step);
+
     // ========================================================================
     // Example Executables (Phase 9)
     // ========================================================================
@@ -432,4 +489,58 @@ pub fn build(b: *std.Build) void {
     const run_realworld_error = b.addRunArtifact(realworld_error);
     const realworld_error_step = b.step("run-realworld-error", "Run error handling example");
     realworld_error_step.dependOn(&run_realworld_error.step);
+
+    // Facebook Post Scraper - demonstrates full automation workflow
+    const fb_scraper = b.addExecutable(.{
+        .name = "fb_scraper",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/facebook_post_scraper.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(fb_scraper);
+
+    const run_fb_scraper = b.addRunArtifact(fb_scraper);
+    const fb_scraper_step = b.step("run-fb-scraper", "Run Facebook post scraper (launches Chrome, scrapes posts via OCR)");
+    fb_scraper_step.dependOn(&run_fb_scraper.step);
+
+    // Website Navigation Test - demonstrates button finding and clicking
+    const nav_test = b.addExecutable(.{
+        .name = "nav_test",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/website_navigation_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(nav_test);
+
+    const run_nav_test = b.addRunArtifact(nav_test);
+    const nav_test_step = b.step("run-nav-test", "Run website navigation test (launches Chrome, clicks buttons, verifies navigation)");
+    nav_test_step.dependOn(&run_nav_test.step);
+
+    // Simple Click Test - visual verification of mouse control
+    const click_test = b.addExecutable(.{
+        .name = "click_test",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/simple_click_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(click_test);
+
+    const run_click_test = b.addRunArtifact(click_test);
+    const click_test_step = b.step("run-click-test", "Run simple mouse click test (watch the cursor move!)");
+    click_test_step.dependOn(&run_click_test.step);
 }

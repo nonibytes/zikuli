@@ -49,13 +49,17 @@ pub const finder = @import("finder.zig");
 
 pub const x11 = @import("platform/x11.zig");
 pub const platform_xtest = @import("platform/xtest.zig");
+pub const xrandr = @import("platform/xrandr.zig");
+pub const monitors = @import("monitors.zig");
 pub const screen = @import("screen.zig");
 pub const image = @import("image.zig");
 
-// Re-export Screen and Image
+// Re-export Screen, Image, and Monitors
 pub const Screen = screen.Screen;
 pub const Image = image.Image;
 pub const Finder = finder.Finder;
+pub const Monitors = monitors.Monitors;
+pub const MonitorInfo = monitors.MonitorInfo;
 
 // Convenience re-exports - Core Types
 pub const Point = geometry.Point;
@@ -155,6 +159,8 @@ test {
     _ = region;
     _ = x11;
     _ = platform_xtest;
+    _ = xrandr;
+    _ = monitors;
     _ = screen;
     _ = image;
     _ = xtest;
