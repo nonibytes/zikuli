@@ -374,4 +374,62 @@ pub fn build(b: *std.Build) void {
     const run_example_ocr = b.addRunArtifact(example_ocr);
     const example_ocr_step = b.step("run-example-ocr", "Run OCR text recognition example");
     example_ocr_step.dependOn(&run_example_ocr.step);
+
+    // ========================================================================
+    // Real-World Examples (Phase 10)
+    // ========================================================================
+
+    // Text editor automation
+    const realworld_editor = b.addExecutable(.{
+        .name = "realworld_editor",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/real_world/text_editor.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(realworld_editor);
+
+    const run_realworld_editor = b.addRunArtifact(realworld_editor);
+    const realworld_editor_step = b.step("run-realworld-editor", "Run text editor automation example");
+    realworld_editor_step.dependOn(&run_realworld_editor.step);
+
+    // Screenshot automation
+    const realworld_screenshot = b.addExecutable(.{
+        .name = "realworld_screenshot",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/real_world/screenshot_automation.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(realworld_screenshot);
+
+    const run_realworld_screenshot = b.addRunArtifact(realworld_screenshot);
+    const realworld_screenshot_step = b.step("run-realworld-screenshot", "Run screenshot automation example");
+    realworld_screenshot_step.dependOn(&run_realworld_screenshot.step);
+
+    // Error handling example
+    const realworld_error = b.addExecutable(.{
+        .name = "realworld_error",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/real_world/error_handling.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(realworld_error);
+
+    const run_realworld_error = b.addRunArtifact(realworld_error);
+    const realworld_error_step = b.step("run-realworld-error", "Run error handling example");
+    realworld_error_step.dependOn(&run_realworld_error.step);
 }

@@ -37,7 +37,7 @@ pub fn main() !void {
 
     // Step 1: Type a simple string
     try stdout.print("\nStep 1: Typing 'Hello, Zikuli!'...\n", .{});
-    try Keyboard.typeString("Hello, Zikuli!");
+    try Keyboard.typeText("Hello, Zikuli!");
     try stdout.print("  Done!\n", .{});
 
     std.Thread.sleep(500 * std.time.ns_per_ms);
@@ -51,7 +51,7 @@ pub fn main() !void {
 
     // Step 3: Type with mixed case
     try stdout.print("\nStep 3: Typing 'This Is Mixed Case'...\n", .{});
-    try Keyboard.typeString("This Is Mixed Case");
+    try Keyboard.typeText("This Is Mixed Case");
     try stdout.print("  Done!\n", .{});
 
     std.Thread.sleep(500 * std.time.ns_per_ms);
@@ -61,9 +61,9 @@ pub fn main() !void {
 
     // Step 5: Type numbers and symbols
     try stdout.print("\nStep 4: Typing numbers and symbols...\n", .{});
-    try Keyboard.typeString("Numbers: 12345");
+    try Keyboard.typeText("Numbers: 12345");
     try Keyboard.press(KeySym.Return);
-    try Keyboard.typeString("Symbols: !@#$%");
+    try Keyboard.typeText("Symbols: !@#$%");
     try stdout.print("  Done!\n", .{});
 
     std.Thread.sleep(500 * std.time.ns_per_ms);
@@ -102,7 +102,7 @@ pub fn main() !void {
     try stdout.print("  Moved cursor 5 positions right\n", .{});
 
     // Step 9: Type at cursor position
-    try Keyboard.typeString("[INSERTED]");
+    try Keyboard.typeText("[INSERTED]");
     try stdout.print("  Inserted text at cursor position\n", .{});
 
     // Summary
