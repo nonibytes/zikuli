@@ -268,6 +268,7 @@ pub const OCR = struct {
 
             // Copy text and store result
             const owned_text = try self.allocator.dupe(u8, text_slice);
+            errdefer self.allocator.free(owned_text);
 
             try words.append(self.allocator, .{
                 .text = owned_text,

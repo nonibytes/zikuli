@@ -11,6 +11,15 @@
 //! - XTestFakeMotionEvent for mouse movement
 //! - XTestFakeButtonEvent for button press/release
 //! - XTestFakeKeyEvent for key press/release
+//!
+//! ## Thread Safety
+//!
+//! **WARNING: This module is NOT thread-safe.**
+//!
+//! The global X11 connection and mouse state are shared mutable state without
+//! synchronization. All Mouse operations must be called from a single thread.
+//! If you need to use Zikuli from multiple threads, serialize all input
+//! operations through a single thread or use external synchronization.
 
 const std = @import("std");
 const geometry = @import("geometry.zig");
@@ -236,6 +245,8 @@ pub const Mouse = struct {
     /// Drag from current position to destination
     pub fn drag(dest_x: i32, dest_y: i32, button: MouseButton) !void {
         try buttonDown(button);
+        // Ensure button is released if move fails
+        errdefer buttonUp(button) catch {};
         try smoothMoveTo(dest_x, dest_y);
         try buttonUp(button);
     }

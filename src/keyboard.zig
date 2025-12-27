@@ -10,6 +10,14 @@
 //! - X11 keysyms map to physical key positions
 //! - Characters are converted to keysyms via XStringToKeysym
 //! - Shifted characters need Shift modifier
+//!
+//! ## Thread Safety
+//!
+//! **WARNING: This module is NOT thread-safe.**
+//!
+//! The keyboard state is shared mutable state without synchronization.
+//! All Keyboard operations must be called from a single thread.
+//! The X11 connection is shared with the Mouse module (xtest.zig).
 
 const std = @import("std");
 const geometry = @import("geometry.zig");
@@ -265,6 +273,10 @@ pub const Keyboard = struct {
 
         if (need_shift) {
             try keyDown(KeySym.Shift_L);
+        }
+        // Ensure Shift is released if keyPress fails
+        errdefer {
+            if (need_shift) keyUp(KeySym.Shift_L) catch {};
         }
 
         try conn.keyPress(keycode);
