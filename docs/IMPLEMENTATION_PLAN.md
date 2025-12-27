@@ -54,8 +54,150 @@ For each feature:
 4. Run tests (must PASS)
 5. Run full regression (NO regressions allowed)
 6. Manual verification with actual execution
-7. Commit with evidence
+7. Playwright Python real-world verification (see below)
+8. SPAWN PARANOID REVIEWER AGENT (see below) - MANDATORY
+9. Fix all issues raised by reviewer
+10. Commit with evidence
 ```
+
+### Paranoid Reviewer Agent (MANDATORY after EVERY phase)
+
+**After completing each phase, you MUST spawn a paranoid code reviewer agent.**
+
+This is NON-NEGOTIABLE. The agent catches bugs, security issues, and correctness problems
+that are easy to miss during implementation.
+
+**When to Spawn:**
+- Immediately after all tests pass for the phase
+- Before committing any phase completion
+- After any significant code changes
+
+**How to Spawn:**
+```
+Use the Task tool with subagent_type='general-purpose' with a detailed review prompt
+```
+
+**Agent Prompt Template:**
+```
+You are a paranoid code reviewer for the Zikuli project (Sikuli re-implementation in Zig).
+
+Review Phase X: [Phase Name]
+
+Files to review:
+- [list all files created/modified in this phase]
+
+Check for:
+1. CORRECTNESS: Does this match Sikuli's behavior? Reference SikuliX source at /tmp/temp-github-repos/SikuliX1/
+2. MEMORY SAFETY: Any leaks, use-after-free, buffer overflows?
+3. ERROR HANDLING: All error paths handled? Errors propagated correctly?
+4. EDGE CASES: Zero sizes, negative coords, null pointers, empty arrays?
+5. SECURITY: Any injection risks, unsafe operations?
+6. PLATFORM: Will this work on different Linux distros? X11 vs Wayland concerns?
+7. PERFORMANCE: Any obvious inefficiencies?
+8. IDIOMS: Is this idiomatic Zig? Using std lib correctly?
+
+For each issue found, provide:
+- Severity: CRITICAL / HIGH / MEDIUM / LOW
+- Location: file:line
+- Issue: Description
+- Fix: Suggested fix
+
+Read all files thoroughly. Be paranoid. Assume there are bugs until proven otherwise.
+```
+
+**Process:**
+1. Spawn agent with files list
+2. Wait for agent to complete review
+3. Fix ALL issues marked CRITICAL or HIGH immediately
+4. Fix MEDIUM issues before commit
+5. Document LOW issues in code comments if not fixing
+6. Re-run agent if significant changes made
+
+### Real-World Web Automation Verification (REQUIRED for ALL phases)
+
+**EVERY phase MUST include Playwright Python verification tests** that validate Zikuli functionality in real-world browser scenarios.
+
+**Process:**
+1. Create test script in `tests/playwright/test_phase_X.py`
+2. Use Playwright to set up test scenarios (open browser, navigate to test sites)
+3. Run Zikuli operations against the browser window
+4. Use Playwright to verify results (compare screenshots, check element states)
+5. Log all operations with timestamps
+
+**Test Websites to Use:**
+- `https://the-internet.herokuapp.com` - Various UI patterns (buttons, forms, dropdowns)
+- `https://demo.playwright.dev/todomvc` - Interactive app with state
+- `https://www.google.com` - Search functionality
+- `https://example.com` - Simple static page
+
+**Playwright Python Test Template:**
+```python
+#!/usr/bin/env python3
+"""Phase X: Real-world verification test using Playwright + Zikuli"""
+
+import subprocess
+import time
+from datetime import datetime
+from playwright.sync_api import sync_playwright
+
+def log(msg: str):
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] {msg}")
+
+def run_zikuli(args: list) -> subprocess.CompletedProcess:
+    """Run Zikuli test binary and return result."""
+    cmd = ["./zig-out/bin/test_binary"] + args
+    log(f"Running: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    log(f"Exit code: {result.returncode}")
+    if result.stdout:
+        log(f"stdout: {result.stdout}")
+    if result.stderr:
+        log(f"stderr: {result.stderr}")
+    return result
+
+def test_phase_X():
+    log("Starting Phase X verification")
+
+    with sync_playwright() as p:
+        # Launch browser
+        browser = p.chromium.launch(headless=False)
+        page = browser.new_page()
+
+        # Navigate to test site
+        page.goto("https://the-internet.herokuapp.com")
+        log("Browser opened and navigated")
+
+        # Wait for page to be ready
+        page.wait_for_load_state("networkidle")
+        time.sleep(1)  # Allow Zikuli time to capture stable screen
+
+        # TODO: Run Zikuli operations here
+        # result = run_zikuli(["--action", "capture", "--output", "/tmp/screen.png"])
+        # assert result.returncode == 0, "Zikuli capture failed"
+
+        # TODO: Verify with Playwright
+        # screenshot = page.screenshot()
+        # assert compare_images(screenshot, "/tmp/screen.png")
+
+        browser.close()
+
+    log("Phase X verification PASSED")
+
+if __name__ == "__main__":
+    test_phase_X()
+```
+
+**Requirements:**
+```bash
+# Install Playwright Python
+pip install playwright
+playwright install chromium
+```
+
+**Why This Matters:**
+- Unit tests verify isolated functionality
+- Playwright tests verify real-world integration
+- Together they ensure Zikuli actually works for GUI automation
 
 ---
 

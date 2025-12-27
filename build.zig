@@ -51,6 +51,21 @@ pub fn build(b: *std.Build) void {
     // Link image handling libraries
     mod.linkSystemLibrary("png", .{});
 
+    // Link OpenCV for template matching
+    mod.linkSystemLibrary("opencv4", .{});
+
+    // Add include path for our OpenCV wrapper header
+    mod.addIncludePath(b.path("src/opencv"));
+
+    // Compile the OpenCV C++ wrapper
+    mod.addCSourceFile(.{
+        .file = b.path("src/opencv/opencv_wrapper.cpp"),
+        .flags = &.{ "-std=c++11" },
+    });
+
+    // Link C++ runtime
+    mod.linkSystemLibrary("stdc++", .{});
+
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
     // to the module defined above, it's sometimes preferable to split business
@@ -185,4 +200,22 @@ pub fn build(b: *std.Build) void {
     const run_test_capture = b.addRunArtifact(test_capture);
     const test_capture_step = b.step("test-capture", "Run X11 capture verification test");
     test_capture_step.dependOn(&run_test_capture.step);
+
+    // Test finder executable for verifying OpenCV template matching
+    const test_finder = b.addExecutable(.{
+        .name = "test_finder",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_finder.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_finder);
+
+    const run_test_finder = b.addRunArtifact(test_finder);
+    const test_finder_step = b.step("test-finder", "Run OpenCV template matching verification test");
+    test_finder_step.dependOn(&run_test_finder.step);
 }

@@ -41,6 +41,7 @@ pub const geometry = @import("geometry.zig");
 pub const pattern = @import("pattern.zig");
 pub const match = @import("match.zig");
 pub const region = @import("region.zig");
+pub const finder = @import("finder.zig");
 
 // ============================================================================
 // Platform Modules (Phase 2)
@@ -53,6 +54,7 @@ pub const image = @import("image.zig");
 // Re-export Screen and Image
 pub const Screen = screen.Screen;
 pub const Image = image.Image;
+pub const Finder = finder.Finder;
 
 // Convenience re-exports - Core Types
 pub const Point = geometry.Point;
