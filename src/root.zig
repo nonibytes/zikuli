@@ -48,6 +48,7 @@ pub const finder = @import("finder.zig");
 // ============================================================================
 
 pub const x11 = @import("platform/x11.zig");
+pub const platform_xtest = @import("platform/xtest.zig");
 pub const screen = @import("screen.zig");
 pub const image = @import("image.zig");
 
@@ -65,24 +66,19 @@ pub const Match = match.Match;
 pub const Region = region.Region;
 
 // ============================================================================
-// Modules to be added in later phases
+// Input Modules (Phase 5)
 // ============================================================================
 
-// Phase 2: Screen capture
-// pub const screen = @import("screen.zig");
-// pub const Screen = screen.Screen;
+pub const xtest = @import("xtest.zig");
 
-// Phase 3: Image handling
-// pub const image = @import("image.zig");
-// pub const Image = image.Image;
+// Re-export XTest types
+pub const Mouse = xtest.Mouse;
+pub const MouseButton = xtest.MouseButton;
+pub const MouseState = xtest.MouseState;
 
-// Phase 4: Template matching
-// pub const finder = @import("finder.zig");
-// pub const Finder = finder.Finder;
-
-// Phase 5: Mouse control
-// pub const mouse = @import("input/mouse.zig");
-// pub const Mouse = mouse.Mouse;
+// ============================================================================
+// Modules to be added in later phases
+// ============================================================================
 
 // Phase 6: Keyboard control
 // pub const keyboard = @import("input/keyboard.zig");
@@ -150,6 +146,8 @@ test {
     _ = match;
     _ = region;
     _ = x11;
+    _ = platform_xtest;
     _ = screen;
     _ = image;
+    _ = xtest;
 }

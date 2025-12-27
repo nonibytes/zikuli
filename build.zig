@@ -48,6 +48,10 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("xcb-shm", .{});
     mod.linkSystemLibrary("xcb-image", .{});
 
+    // Link Xlib and XTest for synthetic input (Phase 5)
+    mod.linkSystemLibrary("X11", .{});
+    mod.linkSystemLibrary("Xtst", .{});
+
     // Link image handling libraries
     mod.linkSystemLibrary("png", .{});
 
@@ -218,4 +222,22 @@ pub fn build(b: *std.Build) void {
     const run_test_finder = b.addRunArtifact(test_finder);
     const test_finder_step = b.step("test-finder", "Run OpenCV template matching verification test");
     test_finder_step.dependOn(&run_test_finder.step);
+
+    // Test mouse executable for verifying XTest mouse control (Phase 5)
+    const test_mouse = b.addExecutable(.{
+        .name = "test_mouse",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_mouse.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zikuli", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(test_mouse);
+
+    const run_test_mouse = b.addRunArtifact(test_mouse);
+    const test_mouse_step = b.step("test-mouse", "Run XTest mouse control verification test");
+    test_mouse_step.dependOn(&run_test_mouse.step);
 }
